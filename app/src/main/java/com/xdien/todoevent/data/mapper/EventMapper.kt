@@ -18,13 +18,28 @@ object EventMapper {
      * Convert domain Event to TodoEntity for database storage
      */
     fun Event.toEntity(): TodoEntity {
+        // Convert ISO string to timestamp for database storage
+        val eventTimeMillis = try {
+            if (this.startDate.matches(Regex("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}"))) {
+                // ISO format: "2024-01-01T10:30:00"
+                val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
+                val dateTime = java.time.LocalDateTime.parse(this.startDate, formatter)
+                dateTime.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+            } else {
+                // Try to parse as timestamp
+                this.startDate.toLongOrNull() ?: System.currentTimeMillis()
+            }
+        } catch (e: Exception) {
+            System.currentTimeMillis()
+        }
+        
         return TodoEntity(
             id = this.id.toLong(),
             title = this.title,
             description = this.description,
             thumbnailUrl = this.images.firstOrNull()?.url,
             galleryImages = this.images.map { it.url },
-            eventTime = this.startDate.toLongOrNull() ?: System.currentTimeMillis(),
+            eventTime = eventTimeMillis,
             eventEndTime = null, // Not used in new structure
             location = this.location,
             eventTypeId = this.typeId.toLong(),
@@ -38,12 +53,23 @@ object EventMapper {
      * Convert TodoEntity to domain Event
      */
     fun TodoEntity.toDomain(): Event {
+        // Convert timestamp to ISO string format
+        val startDateISO = try {
+            val eventTimeMillis = this.eventTime ?: System.currentTimeMillis()
+            val instant = java.time.Instant.ofEpochMilli(eventTimeMillis)
+            val dateTime = instant.atZone(java.time.ZoneId.systemDefault()).toLocalDateTime()
+            val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
+            dateTime.format(formatter)
+        } catch (e: Exception) {
+            (this.eventTime ?: System.currentTimeMillis()).toString() // Fallback to timestamp string
+        }
+        
         return Event(
             id = this.id.toInt(),
             title = this.title,
             description = this.description ?: "",
             typeId = this.eventTypeId?.toInt() ?: 1,
-            startDate = this.eventTime.toString(),
+            startDate = startDateISO,
             location = this.location ?: "",
             createdAt = this.createdAt.toString(),
             updatedAt = this.updatedAt.toString(),

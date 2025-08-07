@@ -37,6 +37,14 @@ interface EventRepository {
     fun getEventById(id: Int): Flow<Event?>
     
     /**
+     * Get event by ID from API
+     * 
+     * @param id The event ID
+     * @return The event or null if not found
+     */
+    suspend fun getEventFromApi(id: Int): Event?
+    
+    /**
      * Update an existing event
      * 
      * @param event The event to update

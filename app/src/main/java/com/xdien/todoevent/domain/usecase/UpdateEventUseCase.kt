@@ -26,7 +26,7 @@ class UpdateEventUseCase @Inject constructor(
                 return Result.failure(IllegalArgumentException("Invalid event data"))
             }
             
-            // Update event through repository
+            // Update event through repository (API first, local DB only if API succeeds)
             eventRepository.updateEvent(event)
             Result.success(event)
         } catch (e: Exception) {

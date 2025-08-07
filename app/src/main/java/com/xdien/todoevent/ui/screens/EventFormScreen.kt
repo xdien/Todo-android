@@ -2,11 +2,17 @@ package com.xdien.todoevent.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -40,6 +46,12 @@ fun EventFormScreen(
     val uiState by viewModel.uiState.collectAsState()
     val eventTypes by viewModel.eventTypes.collectAsState()
     val selectedImages by viewModel.selectedImages.collectAsState()
+    val uploadProgress by viewModel.uploadProgress.collectAsState()
+    val currentEvent by viewModel.currentEvent.collectAsState()
+    
+    // Error dialog state
+    var showErrorDialog by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf("") }
     
     // Load event for editing if eventId is provided
     LaunchedEffect(eventId) {
@@ -52,7 +64,39 @@ fun EventFormScreen(
             onEventSaved()
         }
     }
+    
+    // Handle error
+    LaunchedEffect(uiState.error) {
+        if (uiState.error != null) {
+            errorMessage = uiState.error!!
+            showErrorDialog = true
+        }
+    }
+    
+    // Handle back navigation with upload in progress
+    val context = LocalContext.current
+    val onBackPressed = {
+        if (viewModel.isUploading()) {
+            // Show confirmation dialog if upload is in progress
+            // For now, just allow back navigation
+            onNavigateBack()
+        } else {
+            onNavigateBack()
+        }
+    }
 
+    val snackbarHostState = remember { SnackbarHostState() }
+    
+    // Show success snackbar
+    LaunchedEffect(uiState.isSuccess) {
+        if (uiState.isSuccess) {
+            snackbarHostState.showSnackbar(
+                message = if (uiState.isEditMode) "Cập nhật sự kiện thành công!" else "Tạo sự kiện thành công!",
+                duration = SnackbarDuration.Short
+            )
+        }
+    }
+    
     Scaffold(
         topBar = {
             TopAppBar(
@@ -62,7 +106,7 @@ fun EventFormScreen(
                     ) 
                 },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    IconButton(onClick = onBackPressed) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
@@ -88,7 +132,8 @@ fun EventFormScreen(
                     containerColor = MaterialTheme.colorScheme.primaryContainer
                 )
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -238,9 +283,10 @@ fun EventFormScreen(
                 )
             }
 
-            // Image Selection Section (only for new events)
+            // Image Selection Section
+            val context = LocalContext.current
             if (!uiState.isEditMode) {
-                val context = LocalContext.current
+                // For new events - show image picker
                 ImagePicker(
                     selectedImages = selectedImages.map { it.toUri() },
                     onImageSelected = { uri ->
@@ -260,39 +306,54 @@ fun EventFormScreen(
                     modifier = Modifier.fillMaxWidth(),
                     maxItems = 5
                 )
-            }
-
-            // Error Message
-            if (uiState.error != null) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    )
-                ) {
-                    Text(
-                        text = uiState.error!!,
-                        modifier = Modifier.padding(16.dp),
-                        color = MaterialTheme.colorScheme.onErrorContainer
-                    )
+            } else {
+                // For edit mode - show existing images
+                currentEvent?.let { event ->
+                    if (event.images.isNotEmpty()) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp)
+                            ) {
+                                Text(
+                                    text = "Ảnh sự kiện",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    items(event.images) { image ->
+                                        Card(
+                                            modifier = Modifier.size(80.dp),
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = MaterialTheme.colorScheme.surface
+                                            )
+                                        ) {
+                                            AsyncImage(
+                                                model = image.url,
+                                                contentDescription = "Event image",
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
-            // Success Message
-            if (uiState.isSuccess) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
-                ) {
-                    Text(
-                        text = if (uiState.isEditMode) "Cập nhật sự kiện thành công!" else "Tạo sự kiện thành công!",
-                        modifier = Modifier.padding(16.dp),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-            }
+            // Error Message - Removed from here, will show as dialog instead
+
+            // Success Message - Now handled by Snackbar
             
             // Duplicate Image Message
             if (uiState.duplicateImageMessage != null) {
@@ -324,8 +385,88 @@ fun EventFormScreen(
                     }
                 }
             }
-
-
+            
+            // Upload Progress
+            uploadProgress?.let { progress ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Đang tải ảnh lên...",
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "${progress.uploadedCount}/${progress.totalCount}",
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            progress = { progress.uploadedCount.toFloat() / progress.totalCount.toFloat() },
+                            modifier = Modifier.fillMaxWidth(),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.3f)
+                        )
+                    }
+                }
+            }
+        }
+        
+        // Error Dialog
+        if (showErrorDialog) {
+            AlertDialog(
+                onDismissRequest = {
+                    showErrorDialog = false
+                    viewModel.clearError()
+                },
+                title = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = "Error",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Text(
+                            text = if (uiState.isEditMode) "Lỗi cập nhật" else "Lỗi tạo sự kiện",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                },
+                text = {
+                    Text(
+                        text = errorMessage,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showErrorDialog = false
+                            viewModel.clearError()
+                        }
+                    ) {
+                        Text("Đóng")
+                    }
+                },
+                containerColor = MaterialTheme.colorScheme.surface,
+                titleContentColor = MaterialTheme.colorScheme.onSurface,
+                textContentColor = MaterialTheme.colorScheme.onSurface
+            )
         }
     }
 }
@@ -375,6 +516,7 @@ fun EventTypeDropdown(
                 )
             }
         }
+        
     }
 }
 
@@ -416,8 +558,24 @@ fun DateTimePicker(
         }
     }
     
+    // Format display value
+    val displayValue = remember(value) {
+        if (value.isNotBlank()) {
+            try {
+                val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
+                val dateTime = LocalDateTime.parse(value, formatter)
+                val displayFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
+                dateTime.format(displayFormatter)
+            } catch (e: Exception) {
+                value // Fallback to original value if parsing fails
+            }
+        } else {
+            ""
+        }
+    }
+    
     OutlinedTextField(
-        value = value,
+        value = displayValue,
         onValueChange = {},
         readOnly = true,
         label = { Text("Thời gian sự kiện *") },

@@ -72,6 +72,25 @@ class EventRepositoryImpl @Inject constructor(
         }
     }
     
+    override suspend fun getEventFromApi(id: Int): Event? {
+        return try {
+            val apiResponse = eventApiService.getEventById(id)
+            if (apiResponse.success) {
+                val event = apiResponse.data.toDomain()
+                
+                // Save to local database for caching
+                val entity = event.toEntity()
+                todoDao.insertTodo(entity)
+                
+                event
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+    
     override suspend fun updateEvent(event: Event) {
         try {
             // First, try to update via API
@@ -79,16 +98,14 @@ class EventRepositoryImpl @Inject constructor(
             val apiResponse = eventApiService.updateEvent(event.id, apiRequest)
             
             if (apiResponse.success) {
-                // Update local database
+                // Update local database only if API succeeds
                 val entity = event.toEntity()
                 todoDao.updateTodo(entity)
             } else {
                 throw Exception(apiResponse.message)
             }
         } catch (e: Exception) {
-            // If API fails, update locally only
-            val entity = event.toEntity()
-            todoDao.updateTodo(entity)
+            // If API fails, don't update local database
             throw e // Re-throw to inform the caller
         }
     }

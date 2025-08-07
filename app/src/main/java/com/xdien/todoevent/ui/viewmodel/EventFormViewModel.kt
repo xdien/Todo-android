@@ -8,6 +8,8 @@ import com.xdien.todoevent.domain.usecase.CreateEventUseCase
 import com.xdien.todoevent.domain.usecase.GetEventTypesUseCase
 import com.xdien.todoevent.domain.usecase.UploadEventImagesUseCase
 import com.xdien.todoevent.domain.usecase.UpdateEventUseCase
+import com.xdien.todoevent.domain.usecase.GetEventByIdUseCase
+import com.xdien.todoevent.domain.usecase.UploadImagesInBackgroundUseCase
 import com.xdien.todoevent.domain.repository.EventRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,6 +28,8 @@ class EventFormViewModel @Inject constructor(
     private val getEventTypesUseCase: GetEventTypesUseCase,
     private val uploadEventImagesUseCase: UploadEventImagesUseCase,
     private val updateEventUseCase: UpdateEventUseCase,
+    private val getEventByIdUseCase: GetEventByIdUseCase,
+    private val uploadImagesInBackgroundUseCase: UploadImagesInBackgroundUseCase,
     private val eventRepository: EventRepository
 ) : ViewModel() {
 
@@ -42,8 +46,16 @@ class EventFormViewModel @Inject constructor(
     val selectedImages: StateFlow<List<File>> = _selectedImages.asStateFlow()
 
     // Current event for editing
-    private var currentEvent: Event? = null
+    private var currentEventData: Event? = null
     private var isEditMode = false
+    
+    // Current event state for UI
+    private val _currentEvent = MutableStateFlow<Event?>(null)
+    val currentEvent: StateFlow<Event?> = _currentEvent.asStateFlow()
+    
+    // Upload progress tracking
+    private val _uploadProgress = MutableStateFlow<UploadProgress?>(null)
+    val uploadProgress: StateFlow<UploadProgress?> = _uploadProgress.asStateFlow()
 
     init {
         loadEventTypes()
@@ -55,12 +67,14 @@ class EventFormViewModel @Inject constructor(
     fun loadEventForEdit(eventId: Long) {
         isEditMode = true
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             
             try {
-                val event = eventRepository.getEventById(eventId.toInt()).first()
-                if (event != null) {
-                    currentEvent = event
+                // Use GetEventByIdUseCase which tries API first, then local DB
+                val result = getEventByIdUseCase(eventId.toInt())
+                result.onSuccess { event ->
+                    currentEventData = event
+                    _currentEvent.value = event
                     _uiState.value = _uiState.value.copy(
                         title = event.title,
                         description = event.description,
@@ -68,12 +82,13 @@ class EventFormViewModel @Inject constructor(
                         startDate = event.startDate,
                         location = event.location,
                         isLoading = false,
-                        isEditMode = true
+                        isEditMode = true,
+                        error = null
                     )
-                } else {
+                }.onFailure { error ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        error = "Không tìm thấy sự kiện"
+                        error = "Không thể tải thông tin sự kiện: ${error.message}"
                     )
                 }
             } catch (e: Exception) {
@@ -208,7 +223,7 @@ class EventFormViewModel @Inject constructor(
             try {
                 if (isEditMode) {
                     // Update existing event
-                    currentEvent?.let { event ->
+                    currentEventData?.let { event ->
                         val result = updateEventUseCase(
                             id = event.id,
                             title = currentState.title,
@@ -225,6 +240,7 @@ class EventFormViewModel @Inject constructor(
                                 error = null
                             )
                         }.onFailure { error ->
+                            // Don't save to local DB if API update fails
                             _uiState.value = currentState.copy(
                                 isLoading = false,
                                 error = error.message ?: "Không thể cập nhật sự kiện"
@@ -233,26 +249,20 @@ class EventFormViewModel @Inject constructor(
                     }
                 } else {
                     // Create new event
-                    val result = if (_selectedImages.value.isNotEmpty()) {
-                        createEventUseCase.invokeWithImages(
-                            title = currentState.title,
-                            description = currentState.description,
-                            typeId = currentState.typeId,
-                            startDate = currentState.startDate,
-                            location = currentState.location,
-                            imageFiles = _selectedImages.value
-                        )
-                    } else {
-                        createEventUseCase.invoke(
-                            title = currentState.title,
-                            description = currentState.description,
-                            typeId = currentState.typeId,
-                            startDate = currentState.startDate,
-                            location = currentState.location
-                        )
-                    }
+                    val result = createEventUseCase.invoke(
+                        title = currentState.title,
+                        description = currentState.description,
+                        typeId = currentState.typeId,
+                        startDate = currentState.startDate,
+                        location = currentState.location
+                    )
 
                     result.onSuccess { event ->
+                        // If there are images, upload them in background
+                        if (_selectedImages.value.isNotEmpty()) {
+                            uploadImagesInBackground(event.id, _selectedImages.value)
+                        }
+                        
                         _uiState.value = currentState.copy(
                             isLoading = false,
                             isSuccess = true,
@@ -327,6 +337,51 @@ class EventFormViewModel @Inject constructor(
     fun clearDuplicateMessage() {
         _uiState.value = _uiState.value.copy(duplicateImageMessage = null)
     }
+    
+    /**
+     * Upload images in background for an event
+     */
+    private fun uploadImagesInBackground(eventId: Int, imageFiles: List<File>) {
+        uploadImagesInBackgroundUseCase.uploadImagesInBackground(
+            eventId = eventId,
+            imageFiles = imageFiles,
+            onProgress = { uploaded, total ->
+                _uploadProgress.value = UploadProgress(uploaded, total)
+            },
+            onSuccess = { uploadedImages ->
+                _uploadProgress.value = null
+                // Could show success message or update UI
+            },
+            onError = { error ->
+                _uploadProgress.value = null
+                // Could show error message
+            }
+        )
+    }
+    
+    /**
+     * Cancel upload for current event
+     */
+    fun cancelUpload() {
+        currentEventData?.let { event ->
+            uploadImagesInBackgroundUseCase.cancelUpload(event.id)
+        }
+    }
+    
+    /**
+     * Check if there's an active upload
+     */
+    fun isUploading(): Boolean {
+        return currentEventData?.let { event ->
+            uploadImagesInBackgroundUseCase.isUploading(event.id)
+        } ?: false
+    }
+    
+    override fun onCleared() {
+        super.onCleared()
+        // Cancel any ongoing uploads when ViewModel is cleared
+        uploadImagesInBackgroundUseCase.cancelAllUploads()
+    }
 }
 
 /**
@@ -345,4 +400,12 @@ data class EventFormUiState(
     val createdEvent: Event? = null,
     val remainingImageSlots: Int = UploadEventImagesUseCase.MAX_IMAGES_PER_EVENT,
     val duplicateImageMessage: String? = null
+)
+
+/**
+ * Upload progress data class
+ */
+data class UploadProgress(
+    val uploadedCount: Int,
+    val totalCount: Int
 )

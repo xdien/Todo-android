@@ -14,7 +14,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [TodoEntity::class, EventTypeEntity::class],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 @TypeConverters(TodoDatabase.Converters::class)
@@ -111,6 +111,7 @@ abstract class TodoDatabase : RoomDatabase() {
                     "eventTime INTEGER, " +
                     "eventEndTime INTEGER, " +
                     "location TEXT, " +
+                    "eventType TEXT, " +
                     "eventTypeId INTEGER, " +
                     "isCompleted INTEGER NOT NULL, " +
                     "createdAt INTEGER NOT NULL, " +
@@ -121,9 +122,9 @@ abstract class TodoDatabase : RoomDatabase() {
                 // Create index for foreign key
                 db.execSQL("CREATE INDEX index_todos_eventTypeId ON todos_new (eventTypeId)")
                 
-                // Migrate existing data
-                db.execSQL("INSERT INTO todos_new (id, title, description, thumbnailUrl, galleryImages, eventTime, eventEndTime, location, isCompleted, createdAt, updatedAt) " +
-                    "SELECT id, title, description, thumbnailUrl, galleryImages, eventTime, eventEndTime, location, isCompleted, createdAt, updatedAt FROM todos")
+                // Migrate existing data including eventType
+                db.execSQL("INSERT INTO todos_new (id, title, description, thumbnailUrl, galleryImages, eventTime, eventEndTime, location, eventType, isCompleted, createdAt, updatedAt) " +
+                    "SELECT id, title, description, thumbnailUrl, galleryImages, eventTime, eventEndTime, location, eventType, isCompleted, createdAt, updatedAt FROM todos")
                 
                 // Update eventTypeId based on eventType string
                 db.execSQL("UPDATE todos_new SET eventTypeId = (SELECT id FROM event_type WHERE name = 'Meeting') WHERE eventType = 'Meeting'")
@@ -132,9 +133,44 @@ abstract class TodoDatabase : RoomDatabase() {
                 db.execSQL("UPDATE todos_new SET eventTypeId = (SELECT id FROM event_type WHERE name = 'Personal') WHERE eventType = 'Personal'")
                 db.execSQL("UPDATE todos_new SET eventTypeId = (SELECT id FROM event_type WHERE name = 'Work') WHERE eventType = 'Work'")
                 
+                // Set default eventTypeId for records that don't match any event type
+                db.execSQL("UPDATE todos_new SET eventTypeId = (SELECT id FROM event_type WHERE name = 'Personal') WHERE eventTypeId IS NULL")
+                
                 // Drop old table and rename new table
                 db.execSQL("DROP TABLE todos")
                 db.execSQL("ALTER TABLE todos_new RENAME TO todos")
+            }
+        }
+        
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Create new table without eventType column
+                db.execSQL("CREATE TABLE todos_new (" +
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                    "title TEXT NOT NULL, " +
+                    "description TEXT, " +
+                    "thumbnailUrl TEXT, " +
+                    "galleryImages TEXT, " +
+                    "eventTime INTEGER, " +
+                    "eventEndTime INTEGER, " +
+                    "location TEXT, " +
+                    "eventTypeId INTEGER, " +
+                    "isCompleted INTEGER NOT NULL, " +
+                    "createdAt INTEGER NOT NULL, " +
+                    "updatedAt INTEGER NOT NULL, " +
+                    "FOREIGN KEY(eventTypeId) REFERENCES event_type(id) ON DELETE CASCADE" +
+                    ")")
+                
+                // Copy data excluding eventType column
+                db.execSQL("INSERT INTO todos_new (id, title, description, thumbnailUrl, galleryImages, eventTime, eventEndTime, location, eventTypeId, isCompleted, createdAt, updatedAt) " +
+                    "SELECT id, title, description, thumbnailUrl, galleryImages, eventTime, eventEndTime, location, eventTypeId, isCompleted, createdAt, updatedAt FROM todos")
+                
+                // Drop old table and rename new table
+                db.execSQL("DROP TABLE todos")
+                db.execSQL("ALTER TABLE todos_new RENAME TO todos")
+                
+                // Recreate index
+                db.execSQL("CREATE INDEX index_todos_eventTypeId ON todos (eventTypeId)")
             }
         }
         
@@ -145,7 +181,7 @@ abstract class TodoDatabase : RoomDatabase() {
                     TodoDatabase::class.java,
                     "todo_database"
                 )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .addCallback(object : RoomDatabase.Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
                         super.onCreate(db)
