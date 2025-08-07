@@ -2,6 +2,7 @@ package com.xdien.todoevent.data.dao
 
 import androidx.room.*
 import com.xdien.todoevent.data.entity.TodoEntity
+import com.xdien.todoevent.data.entity.TodoWithEventType
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -29,4 +30,21 @@ interface TodoDao {
     
     @Query("DELETE FROM todos")
     suspend fun deleteAllTodos()
+    
+    // Queries với quan hệ EventType
+    @Transaction
+    @Query("SELECT * FROM todos ORDER BY createdAt DESC")
+    fun getAllTodosWithEventType(): Flow<List<TodoWithEventType>>
+    
+    @Transaction
+    @Query("SELECT * FROM todos WHERE id = :id")
+    suspend fun getTodoWithEventTypeById(id: Long): TodoWithEventType?
+    
+    @Transaction
+    @Query("SELECT * FROM todos WHERE eventTypeId = :eventTypeId ORDER BY createdAt DESC")
+    fun getTodosByEventType(eventTypeId: Long): Flow<List<TodoWithEventType>>
+    
+    @Transaction
+    @Query("SELECT * FROM todos WHERE eventTypeId = :eventTypeId AND isCompleted = :isCompleted ORDER BY createdAt DESC")
+    fun getTodosByEventTypeAndStatus(eventTypeId: Long, isCompleted: Boolean): Flow<List<TodoWithEventType>>
 } 

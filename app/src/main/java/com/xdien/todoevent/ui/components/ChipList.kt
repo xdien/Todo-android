@@ -115,11 +115,12 @@ fun List<com.xdien.todoevent.data.entity.TodoEntity>.toChipItems(
             id = todo.id.toString(),
             title = todo.title,
             isSelected = selectedIds.contains(todo.id),
-            color = when (todo.eventType) {
-                "Hội thảo" -> Color(0xFF2196F3) // Blue
-                "Workshop" -> Color(0xFF4CAF50) // Green
-                "Meetup" -> Color(0xFFFF9800) // Orange
-                "Hackathon" -> Color(0xFF9C27B0) // Purple
+            color = when (todo.eventTypeId) {
+                1L -> Color(0xFF2196F3) // Blue - Meeting
+                2L -> Color(0xFF4CAF50) // Green - Work
+                3L -> Color(0xFFFF9800) // Orange - Personal
+                4L -> Color(0xFF9C27B0) // Purple - Party
+                5L -> Color(0xFFE91E63) // Pink - Conference
                 else -> null
             }
         )

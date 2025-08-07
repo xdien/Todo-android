@@ -5,6 +5,7 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.xdien.todoevent.data.entity.TodoEntity
+import com.xdien.todoevent.data.entity.TodoWithEventType
 import com.xdien.todoevent.data.repository.SyncResult
 import com.xdien.todoevent.data.repository.TodoRepository
 import com.xdien.todoevent.ui.components.toChipItems
@@ -23,6 +24,9 @@ class TodoViewModel @Inject constructor(
     
     private val _todos = MutableStateFlow<List<TodoEntity>>(emptyList())
     val todos: StateFlow<List<TodoEntity>> = _todos.asStateFlow()
+    
+    private val _todosWithEventType = MutableStateFlow<List<TodoWithEventType>>(emptyList())
+    val todosWithEventType: StateFlow<List<TodoWithEventType>> = _todosWithEventType.asStateFlow()
     
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -54,6 +58,7 @@ class TodoViewModel @Inject constructor(
     
     init {
         loadTodos()
+        loadTodosWithEventType()
         // Add sample events for testing
         addSampleEvents()
         // Initialize chip items
@@ -72,6 +77,19 @@ class TodoViewModel @Inject constructor(
             } finally {
                 _isLoading.value = false
                 _isLoadingLiveData.value = false
+            }
+        }
+    }
+    
+    fun loadTodosWithEventType() {
+        viewModelScope.launch {
+            try {
+                todoRepository.getAllTodosWithEventType().collect { todosWithTypes ->
+                    _todosWithEventType.value = todosWithTypes
+                }
+            } catch (e: Exception) {
+                // Fallback to regular todos if relationship query fails
+                _todosWithEventType.value = emptyList()
             }
         }
     }
@@ -103,12 +121,12 @@ class TodoViewModel @Inject constructor(
         _syncResult.value = null
     }
     
-    fun addTodo(title: String, description: String? = null, eventType: String? = null) {
+    fun addTodo(title: String, description: String? = null, eventTypeId: Long? = null) {
         viewModelScope.launch {
             val todo = TodoEntity(
                 title = title,
                 description = description,
-                eventType = eventType
+                eventTypeId = eventTypeId
             )
             todoRepository.insertTodo(todo)
         }
@@ -150,7 +168,7 @@ class TodoViewModel @Inject constructor(
         eventTime: Long?,
         eventEndTime: Long?,
         location: String?,
-        eventType: String?
+        eventTypeId: Long?
     ) {
         viewModelScope.launch {
             val updatedTodo = TodoEntity(
@@ -162,7 +180,7 @@ class TodoViewModel @Inject constructor(
                 eventTime = eventTime,
                 eventEndTime = eventEndTime,
                 location = location,
-                eventType = eventType,
+                eventTypeId = eventTypeId,
                 isCompleted = false,
                 updatedAt = System.currentTimeMillis()
             )
@@ -207,7 +225,7 @@ class TodoViewModel @Inject constructor(
                     eventTime = System.currentTimeMillis() + 86400000, // Tomorrow
                     eventEndTime = System.currentTimeMillis() + 86400000 + 28800000, // Tomorrow + 8 hours
                     location = "Trung tâm Hội nghị Quốc gia, Hà Nội",
-                    eventType = "Hội thảo"
+                    eventTypeId = null // No event type for sample data
                 ),
                 TodoEntity(
                     title = "Workshop Lập trình Android",
@@ -220,7 +238,7 @@ class TodoViewModel @Inject constructor(
                     eventTime = System.currentTimeMillis() + 172800000, // Day after tomorrow
                     eventEndTime = System.currentTimeMillis() + 172800000 + 14400000, // Day after tomorrow + 4 hours
                     location = "FPT Software, TP.HCM",
-                    eventType = "Workshop"
+                    eventTypeId = null // No event type for sample data
                 ),
                 TodoEntity(
                     title = "Meetup Cộng đồng Developer",
@@ -233,7 +251,7 @@ class TodoViewModel @Inject constructor(
                     eventTime = System.currentTimeMillis() + 259200000, // 3 days later
                     eventEndTime = System.currentTimeMillis() + 259200000 + 7200000, // 3 days later + 2 hours
                     location = "WeWork, Quận 1, TP.HCM",
-                    eventType = "Meetup"
+                    eventTypeId = null // No event type for sample data
                 ),
                 TodoEntity(
                     title = "Hackathon 2024",
@@ -248,7 +266,7 @@ class TodoViewModel @Inject constructor(
                     eventTime = System.currentTimeMillis() + 604800000, // 1 week later
                     eventEndTime = System.currentTimeMillis() + 604800000 + 172800000, // 1 week later + 48 hours
                     location = "Đại học Bách Khoa Hà Nội",
-                    eventType = "Hackathon"
+                    eventTypeId = null // No event type for sample data
                 )
             )
             

@@ -27,7 +27,7 @@ object EventMapper {
             eventTime = this.startDate.toLongOrNull() ?: System.currentTimeMillis(),
             eventEndTime = null, // Not used in new structure
             location = this.location,
-            eventType = this.typeId.toString(),
+            eventTypeId = this.typeId.toLong(),
             isCompleted = false,
             createdAt = this.createdAt.toLongOrNull() ?: System.currentTimeMillis(),
             updatedAt = this.updatedAt?.toLongOrNull() ?: System.currentTimeMillis()
@@ -42,7 +42,7 @@ object EventMapper {
             id = this.id.toInt(),
             title = this.title,
             description = this.description ?: "",
-            typeId = this.eventType?.toIntOrNull() ?: 1,
+            typeId = this.eventTypeId?.toInt() ?: 1,
             startDate = this.eventTime.toString(),
             location = this.location ?: "",
             createdAt = this.createdAt.toString(),

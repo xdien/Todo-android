@@ -5,18 +5,22 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import android.content.Context
 import com.xdien.todoevent.data.dao.TodoDao
+import com.xdien.todoevent.data.dao.EventTypeDao
 import com.xdien.todoevent.data.entity.TodoEntity
+import com.xdien.todoevent.data.entity.EventTypeEntity
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import androidx.room.RoomDatabase
 
 @Database(
-    entities = [TodoEntity::class],
-    version = 4,
+    entities = [TodoEntity::class, EventTypeEntity::class],
+    version = 5,
     exportSchema = false
 )
 @TypeConverters(TodoDatabase.Converters::class)
 abstract class TodoDatabase : RoomDatabase() {
     abstract fun todoDao(): TodoDao
+    abstract fun eventTypeDao(): EventTypeDao
     
     class Converters {
         private val gson = Gson()
@@ -82,6 +86,58 @@ abstract class TodoDatabase : RoomDatabase() {
             }
         }
         
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Create event_type table
+                db.execSQL("CREATE TABLE event_type (" +
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                    "name TEXT NOT NULL" +
+                    ")")
+                
+                // Insert default event types
+                db.execSQL("INSERT INTO event_type (name) VALUES ('Meeting')")
+                db.execSQL("INSERT INTO event_type (name) VALUES ('Party')")
+                db.execSQL("INSERT INTO event_type (name) VALUES ('Conference')")
+                db.execSQL("INSERT INTO event_type (name) VALUES ('Personal')")
+                db.execSQL("INSERT INTO event_type (name) VALUES ('Work')")
+                
+                // Create temporary table for todos with new structure
+                db.execSQL("CREATE TABLE todos_new (" +
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                    "title TEXT NOT NULL, " +
+                    "description TEXT, " +
+                    "thumbnailUrl TEXT, " +
+                    "galleryImages TEXT, " +
+                    "eventTime INTEGER, " +
+                    "eventEndTime INTEGER, " +
+                    "location TEXT, " +
+                    "eventTypeId INTEGER, " +
+                    "isCompleted INTEGER NOT NULL, " +
+                    "createdAt INTEGER NOT NULL, " +
+                    "updatedAt INTEGER NOT NULL, " +
+                    "FOREIGN KEY(eventTypeId) REFERENCES event_type(id) ON DELETE CASCADE" +
+                    ")")
+                
+                // Create index for foreign key
+                db.execSQL("CREATE INDEX index_todos_eventTypeId ON todos_new (eventTypeId)")
+                
+                // Migrate existing data
+                db.execSQL("INSERT INTO todos_new (id, title, description, thumbnailUrl, galleryImages, eventTime, eventEndTime, location, isCompleted, createdAt, updatedAt) " +
+                    "SELECT id, title, description, thumbnailUrl, galleryImages, eventTime, eventEndTime, location, isCompleted, createdAt, updatedAt FROM todos")
+                
+                // Update eventTypeId based on eventType string
+                db.execSQL("UPDATE todos_new SET eventTypeId = (SELECT id FROM event_type WHERE name = 'Meeting') WHERE eventType = 'Meeting'")
+                db.execSQL("UPDATE todos_new SET eventTypeId = (SELECT id FROM event_type WHERE name = 'Party') WHERE eventType = 'Party'")
+                db.execSQL("UPDATE todos_new SET eventTypeId = (SELECT id FROM event_type WHERE name = 'Conference') WHERE eventType = 'Conference'")
+                db.execSQL("UPDATE todos_new SET eventTypeId = (SELECT id FROM event_type WHERE name = 'Personal') WHERE eventType = 'Personal'")
+                db.execSQL("UPDATE todos_new SET eventTypeId = (SELECT id FROM event_type WHERE name = 'Work') WHERE eventType = 'Work'")
+                
+                // Drop old table and rename new table
+                db.execSQL("DROP TABLE todos")
+                db.execSQL("ALTER TABLE todos_new RENAME TO todos")
+            }
+        }
+        
         fun getDatabase(context: Context): TodoDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -89,7 +145,18 @@ abstract class TodoDatabase : RoomDatabase() {
                     TodoDatabase::class.java,
                     "todo_database"
                 )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addCallback(object : RoomDatabase.Callback() {
+                    override fun onCreate(db: SupportSQLiteDatabase) {
+                        super.onCreate(db)
+                        // Create default event types when database is created for the first time
+                        db.execSQL("INSERT INTO event_type (name) VALUES ('Meeting')")
+                        db.execSQL("INSERT INTO event_type (name) VALUES ('Party')")
+                        db.execSQL("INSERT INTO event_type (name) VALUES ('Conference')")
+                        db.execSQL("INSERT INTO event_type (name) VALUES ('Personal')")
+                        db.execSQL("INSERT INTO event_type (name) VALUES ('Work')")
+                    }
+                })
                 .build()
                 INSTANCE = instance
                 instance

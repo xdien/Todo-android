@@ -237,8 +237,8 @@ fun EventDetails(
             fontWeight = FontWeight.Bold
         )
         
-        // Event Type Badge
-        event.eventType?.let { type ->
+        // Event Type Badge - TODO: Update to use EventType relationship
+        event.eventTypeId?.let { typeId ->
             Card(
                 modifier = Modifier.wrapContentWidth(),
                 colors = CardDefaults.cardColors(
@@ -246,7 +246,7 @@ fun EventDetails(
                 )
             ) {
                 Text(
-                    text = type,
+                    text = "Type ID: $typeId", // TODO: Get actual type name from EventTypeEntity
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -480,7 +480,7 @@ private fun shareEvent(context: android.content.Context, event: TodoEntity) {
             appendLine("Thời gian: ${SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(it))}")
         }
         event.location?.let { appendLine("Địa điểm: $it") }
-        event.eventType?.let { appendLine("Loại sự kiện: $it") }
+        event.eventTypeId?.let { appendLine("Loại sự kiện ID: $it") } // TODO: Get actual type name
     }
     
     val sendIntent = android.content.Intent().apply {

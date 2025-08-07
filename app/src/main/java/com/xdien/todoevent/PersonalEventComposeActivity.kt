@@ -48,7 +48,7 @@ class PersonalEventComposeActivity : ComponentActivity() {
         setContent {
             TodoEventTheme {
                 val viewModel: TodoViewModel = hiltViewModel()
-                val events by viewModel.todos.collectAsState()
+                val eventsWithTypes by viewModel.todosWithEventType.collectAsState()
                 val syncResult by viewModel.syncResult.collectAsState()
                 
                 // Search state
@@ -88,18 +88,21 @@ class PersonalEventComposeActivity : ComponentActivity() {
                 }
                 
                 // Create chip items for event types
-                val eventTypeChips = remember(events) {
-                    val eventTypes = events.mapNotNull { it.eventType }.distinct()
-                    eventTypes.map { eventType ->
+                val eventTypeChips = remember(eventsWithTypes) {
+                    val eventTypes = eventsWithTypes
+                        .mapNotNull { it.eventType?.name }
+                        .distinct()
+                    eventTypes.map { eventTypeName ->
                         ChipItem(
-                            id = eventType,
-                            title = eventType,
-                            isSelected = selectedEventTypes.contains(eventType),
-                            color = when (eventType) {
-                                "Hội thảo" -> Color(0xFF2196F3) // Blue
-                                "Workshop" -> Color(0xFF4CAF50) // Green
-                                "Meetup" -> Color(0xFFFF9800) // Orange
-                                "Hackathon" -> Color(0xFF9C27B0) // Purple
+                            id = eventTypeName,
+                            title = eventTypeName,
+                            isSelected = selectedEventTypes.contains(eventTypeName),
+                            color = when (eventTypeName) {
+                                "Meeting" -> Color(0xFF2196F3) // Blue
+                                "Work" -> Color(0xFF4CAF50) // Green
+                                "Personal" -> Color(0xFFFF9800) // Orange
+                                "Party" -> Color(0xFF9C27B0) // Purple
+                                "Conference" -> Color(0xFFE91E63) // Pink
                                 else -> null
                             }
                         )
@@ -107,15 +110,16 @@ class PersonalEventComposeActivity : ComponentActivity() {
                 }
                 
                 // Filter events based on search query and selected event types
-                val filteredEvents = remember(events, searchQuery, selectedEventTypes) {
-                    events.filter { event ->
+                val filteredEvents = remember(eventsWithTypes, searchQuery, selectedEventTypes) {
+                    eventsWithTypes.filter { eventWithType ->
+                        val event = eventWithType.todo
                         val matchesSearch = searchQuery.isEmpty() || 
                             event.title.contains(searchQuery, ignoreCase = true) ||
                             (event.description?.contains(searchQuery, ignoreCase = true) == true) ||
                             (event.location?.contains(searchQuery, ignoreCase = true) == true)
                         
                         val matchesFilter = selectedEventTypes.isEmpty() || 
-                            (event.eventType != null && selectedEventTypes.contains(event.eventType))
+                            (eventWithType.eventType?.name != null && selectedEventTypes.contains(eventWithType.eventType!!.name))
                         
                         matchesSearch && matchesFilter
                     }
@@ -237,7 +241,7 @@ class PersonalEventComposeActivity : ComponentActivity() {
                                 .fillMaxSize()
                                 .padding(top = if (eventTypeChips.isNotEmpty()) 120.dp else 80.dp),
                             viewModel = viewModel,
-                            filteredEvents = filteredEvents,
+                            filteredEvents = filteredEvents.map { it.todo },
                             onEventClick = { event ->
                                 // Navigate to event detail screen
                                 startActivity(EventDetailActivity.createIntent(this@PersonalEventComposeActivity, event.id))

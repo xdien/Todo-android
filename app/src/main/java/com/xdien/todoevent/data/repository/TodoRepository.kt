@@ -3,6 +3,7 @@ package com.xdien.todoevent.data.repository
 import com.xdien.todoevent.data.api.TodoApiService
 import com.xdien.todoevent.data.dao.TodoDao
 import com.xdien.todoevent.data.entity.TodoEntity
+import com.xdien.todoevent.data.entity.TodoWithEventType
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -15,6 +16,10 @@ class TodoRepository @Inject constructor(
     
     fun getAllTodos(): Flow<List<TodoEntity>> {
         return todoDao.getAllTodos()
+    }
+    
+    fun getAllTodosWithEventType(): Flow<List<TodoWithEventType>> {
+        return todoDao.getAllTodosWithEventType()
     }
     
     suspend fun getTodoByIdSuspend(id: Long): TodoEntity? {
@@ -61,7 +66,7 @@ class TodoRepository @Inject constructor(
                     eventTime = apiTodo.eventTime,
                     eventEndTime = apiTodo.eventEndTime,
                     location = apiTodo.location,
-                    eventType = apiTodo.eventType,
+                    eventTypeId = apiTodo.eventType?.toLongOrNull(), // Convert string to Long
                     isCompleted = apiTodo.isCompleted,
                     createdAt = apiTodo.createdAt.toLongOrNull() ?: System.currentTimeMillis(),
                     updatedAt = System.currentTimeMillis()
