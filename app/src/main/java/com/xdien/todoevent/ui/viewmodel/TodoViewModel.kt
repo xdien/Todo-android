@@ -57,6 +57,10 @@ class TodoViewModel @Inject constructor(
             try {
                 // Fetch events from API
                 eventRepository.getEvents(null, null).collect { eventList ->
+                    android.util.Log.d("TodoViewModel", "Received ${eventList.size} events from repository")
+                    eventList.forEach { event ->
+                        android.util.Log.d("TodoViewModel", "Event: ${event.title} (ID: ${event.id})")
+                    }
                     _events.value = eventList
                     _eventsLiveData.value = eventList
                 }

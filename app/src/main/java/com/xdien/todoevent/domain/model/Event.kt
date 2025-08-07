@@ -82,21 +82,22 @@ data class Event(
 data class EventImage(
     val id: Int = 0,
     val eventId: Int = 0,
-    val originalName: String,
-    val filename: String,
+    val originalName: String?,
+    val filename: String?,
     val filePath: String?,
-    val fileSize: Int,
-    val uploadedAt: String,
+    val fileSize: Int?,
+    val uploadedAt: String?,
     val url: String
 ) {
     /**
      * Get file size in human readable format
      */
     fun getFormattedFileSize(): String {
+        val size = fileSize ?: 0
         return when {
-            fileSize < 1024 -> "${fileSize} B"
-            fileSize < 1024 * 1024 -> "${fileSize / 1024} KB"
-            else -> "${fileSize / (1024 * 1024)} MB"
+            size < 1024 -> "${size} B"
+            size < 1024 * 1024 -> "${size / 1024} KB"
+            else -> "${size / (1024 * 1024)} MB"
         }
     }
     
@@ -104,7 +105,7 @@ data class EventImage(
      * Get file extension
      */
     fun getFileExtension(): String {
-        return originalName.substringAfterLast('.', "").lowercase()
+        return originalName?.substringAfterLast('.', "")?.lowercase() ?: ""
     }
 }
 

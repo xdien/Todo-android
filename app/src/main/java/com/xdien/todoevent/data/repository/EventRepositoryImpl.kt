@@ -61,24 +61,37 @@ class EventRepositoryImpl @Inject constructor(
 
     override suspend fun getEvents(keyword: String?, typeId: Int?): Flow<List<Event>> {
         return try {
+            Log.d("EventRepositoryImpl", "Fetching events with keyword: $keyword, typeId: $typeId")
             val apiResponse = eventApiService.getEvents(keyword, typeId)
             
+            Log.d("EventRepositoryImpl", "API response success: ${apiResponse.success}")
+            Log.d("EventRepositoryImpl", "API response message: ${apiResponse.message}")
+            
             if (apiResponse.success) {
+                Log.d("EventRepositoryImpl", "API data events count: ${apiResponse.data.events.size}")
                 val events = apiResponse.data.events.map { eventResponse ->
+                    Log.d("EventRepositoryImpl", "Mapping event: ${eventResponse.title} (ID: ${eventResponse.id})")
                     eventResponse.toDomain()
                 }
+                
+                Log.d("EventRepositoryImpl", "Mapped ${events.size} events to domain models")
                 
                 // Ensure all EventTypes exist in local database
                 events.forEach { event ->
                     ensureEventTypeExists(event.eventTypeId)
                 }
                 
-                flow { emit(events) }
+                flow { 
+                    Log.d("EventRepositoryImpl", "Emitting ${events.size} events to flow")
+                    emit(events) 
+                }
             } else {
+                Log.e("EventRepositoryImpl", "API call failed: ${apiResponse.message}")
                 // Return empty list if API fails
                 flow { emit(emptyList()) }
             }
         } catch (e: Exception) {
+            Log.e("EventRepositoryImpl", "Exception during getEvents", e)
             // Return empty list if API fails
             flow { emit(emptyList()) }
         }
@@ -270,16 +283,17 @@ class EventRepositoryImpl @Inject constructor(
 
 // Extension functions for mapping between API and Domain models
 private fun EventResponse.toDomain(): Event {
+    Log.d("EventRepositoryImpl", "Mapping EventResponse to Domain: ${this.title} (ID: ${this.id})")
     return Event(
         id = this.id,
-        title = this.title,
-        description = this.description,
+        title = this.title ?: "Untitled Event",
+        description = this.description ?: "",
         eventTypeId = this.eventTypeId,
-        startDate = this.startDate,
-        location = this.location,
-        createdAt = this.createdAt,
+        startDate = this.startDate ?: "",
+        location = this.location ?: "",
+        createdAt = this.createdAt ?: "",
         updatedAt = this.updatedAt,
-        images = this.images.map { it.toDomain() }
+        images = this.images?.map { it.toDomain() } ?: emptyList()
     )
 }
 
@@ -287,11 +301,11 @@ private fun ApiEventImage.toDomain(): EventImage {
     return EventImage(
         id = this.id,
         eventId = this.eventId,
-        originalName = this.originalName,
-        filename = this.filename,
-        filePath = this.filePath,
-        fileSize = this.fileSize,
-        uploadedAt = this.uploadedAt,
+        originalName = this.originalName ?: "unknown.jpg",
+        filename = this.filename ?: "unknown.jpg",
+        filePath = this.filePath ?: "",
+        fileSize = this.fileSize ?: 0,
+        uploadedAt = this.uploadedAt ?: "",
         url = "" // Will be set by repository when creating full URL
     )
 }

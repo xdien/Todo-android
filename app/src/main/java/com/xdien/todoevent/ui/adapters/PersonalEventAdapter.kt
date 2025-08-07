@@ -32,7 +32,9 @@ class PersonalEventAdapter(
     }
 
     override fun onBindViewHolder(holder: EventViewHolder, position: Int) {
-        holder.bind(getItem(position))
+        val event = getItem(position)
+        android.util.Log.d("PersonalEventAdapter", "Binding event at position $position: ${event.title} (ID: ${event.id})")
+        holder.bind(event)
     }
 
     class EventViewHolder(

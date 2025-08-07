@@ -15,25 +15,25 @@ data class CreateEventRequest(
 // Event response model (matching mock server)
 data class EventResponse(
     val id: Int,
-    val title: String,
-    val description: String,
+    val title: String?,
+    val description: String?,
     val eventTypeId: Int,
-    val startDate: String,
-    val location: String,
-    val createdAt: String,
+    val startDate: String?,
+    val location: String?,
+    val createdAt: String?,
     val updatedAt: String?,
-    val images: List<EventImage>
+    val images: List<EventImage>?
 )
 
 // Event image model
 data class EventImage(
     val id: Int,
     val eventId: Int,
-    val originalName: String,
-    val filename: String,
-    val filePath: String,
-    val fileSize: Int,
-    val uploadedAt: String
+    val originalName: String?,
+    val filename: String?,
+    val filePath: String?,
+    val fileSize: Int?,
+    val uploadedAt: String?
 )
 
 // New API response models for events list
