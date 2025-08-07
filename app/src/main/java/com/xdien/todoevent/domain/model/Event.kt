@@ -8,7 +8,7 @@ data class Event(
     val id: Int = 0,
     val title: String,
     val description: String,
-    val typeId: Int,
+    val eventTypeId: Int,
     val startDate: String,
     val location: String,
     val createdAt: String = "",
@@ -22,7 +22,7 @@ data class Event(
         return title.isNotBlank() && 
                title.length <= 255 &&
                description.isNotBlank() &&
-               typeId > 0 &&
+                eventTypeId > 0 &&
                startDate.isNotBlank() &&
                location.isNotBlank()
     }
@@ -35,7 +35,7 @@ data class Event(
                title.isNotBlank() && 
                title.length <= 255 &&
                description.isNotBlank() &&
-               typeId > 0 &&
+                eventTypeId > 0 &&
                startDate.isNotBlank() &&
                location.isNotBlank()
     }
@@ -72,7 +72,7 @@ data class Event(
      * Get event type name (helper method)
      */
     fun getEventTypeName(eventTypes: List<EventType>): String {
-        return eventTypes.find { it.id == typeId }?.name ?: "Unknown"
+        return eventTypes.find { it.id == eventTypeId }?.name ?: "Unknown"
     }
 }
 

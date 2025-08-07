@@ -55,7 +55,7 @@ class CreateEventUseCase @Inject constructor(
         val event = Event(
             title = title,
             description = description,
-            typeId = typeId,
+            eventTypeId = typeId,
             startDate = startDate,
             location = location
         )
@@ -119,7 +119,7 @@ class CreateEventUseCase @Inject constructor(
         val event = Event(
             title = title,
             description = description,
-            typeId = typeId,
+            eventTypeId = typeId,
             startDate = startDate,
             location = location
         )

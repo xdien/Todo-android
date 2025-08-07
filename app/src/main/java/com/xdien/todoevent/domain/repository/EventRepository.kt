@@ -22,11 +22,13 @@ interface EventRepository {
     suspend fun createEvent(event: Event): Event
     
     /**
-     * Get all events as a Flow
+     * Get events with optional filtering
      * 
-     * @return Flow of all events
+     * @param keyword Search keyword (optional)
+     * @param typeId Filter by event type ID (optional)
+     * @return Flow of events
      */
-    fun getAllEvents(): Flow<List<Event>>
+    suspend fun getEvents(keyword: String? = null, typeId: Int? = null): Flow<List<Event>>
     
     /**
      * Get event by ID
@@ -34,59 +36,48 @@ interface EventRepository {
      * @param id The event ID
      * @return Flow of the event or null if not found
      */
-    fun getEventById(id: Int): Flow<Event?>
-    
-    /**
-     * Get event by ID from API
-     * 
-     * @param id The event ID
-     * @return The event or null if not found
-     */
-    suspend fun getEventFromApi(id: Int): Event?
+    suspend fun getEventById(id: Int): Flow<Event?>
     
     /**
      * Update an existing event
      * 
-     * @param event The event to update
+     * @param id The event ID
+     * @param title Event title
+     * @param description Event description
+     * @param typeId Event type ID
+     * @param startDate Event start date
+     * @param location Event location
+     * @return Result containing the updated event or error
      */
-    suspend fun updateEvent(event: Event)
+    suspend fun updateEvent(
+        id: Int,
+        title: String,
+        description: String,
+        typeId: Int,
+        startDate: String,
+        location: String
+    ): Result<Event>
     
     /**
      * Delete an event
      * 
-     * @param event The event to delete
-     */
-    suspend fun deleteEvent(event: Event)
-    
-    /**
-     * Delete event by ID
-     * 
      * @param id The event ID to delete
      */
-    suspend fun deleteEventById(id: Int)
-    
-    /**
-     * Fetch events from remote API
-     * 
-     * @param keyword Search keyword (optional)
-     * @param typeId Filter by event type ID (optional)
-     * @return List of events from API
-     */
-    suspend fun fetchEventsFromApi(keyword: String? = null, typeId: Int? = null): List<Event>
+    suspend fun deleteEvent(id: Int)
     
     /**
      * Get all event types
      * 
-     * @return List of available event types
+     * @return Result containing list of available event types or error
      */
-    suspend fun getEventTypes(): List<EventType>
+    suspend fun getEventTypes(): Result<List<EventType>>
     
     /**
      * Upload images for an event (max 5 images)
      * 
      * @param eventId The event ID
      * @param imageFiles List of image files to upload
-     * @return List of uploaded image details
+     * @return List of uploaded image details with full URLs
      */
     suspend fun uploadEventImages(eventId: Int, imageFiles: List<File>): List<EventImage>
     

@@ -1,196 +1,211 @@
 package com.xdien.todoevent.data.repository
 
+import com.xdien.todoevent.common.SharedPreferencesHelper
+import com.xdien.todoevent.data.api.ApiResponse
 import com.xdien.todoevent.data.api.EventApiService
+import com.xdien.todoevent.data.api.EventImage as ApiEventImage
+import com.xdien.todoevent.data.api.EventResponse
+import com.xdien.todoevent.data.api.EventType as ApiEventType
+import com.xdien.todoevent.data.api.CreateEventRequest
 import com.xdien.todoevent.data.dao.TodoDao
-import com.xdien.todoevent.data.mapper.EventMapper.toCreateRequest
-import com.xdien.todoevent.data.mapper.EventMapper.toDomain
-import com.xdien.todoevent.data.mapper.EventMapper.toEventDomainList
-import com.xdien.todoevent.data.mapper.EventMapper.toEventImageDomainList
-import com.xdien.todoevent.data.mapper.EventMapper.toEventTypeDomainList
-import com.xdien.todoevent.data.mapper.EventMapper.toEntity
+import com.xdien.todoevent.data.dao.EventTypeDao
+import com.xdien.todoevent.data.entity.TodoEntity
+import com.xdien.todoevent.data.entity.EventTypeEntity
 import com.xdien.todoevent.domain.model.Event
-import com.xdien.todoevent.domain.model.EventType
 import com.xdien.todoevent.domain.model.EventImage
+import com.xdien.todoevent.domain.model.EventType
 import com.xdien.todoevent.domain.repository.EventRepository
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import kotlinx.coroutines.flow.first
 import okhttp3.MultipartBody
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.asRequestBody
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Implementation of EventRepository
- * 
- * This class implements the repository pattern and coordinates between
- * local database and remote API data sources.
- */
 @Singleton
 class EventRepositoryImpl @Inject constructor(
+    private val eventApiService: EventApiService,
     private val todoDao: TodoDao,
-    private val eventApiService: EventApiService
+    private val eventTypeDao: EventTypeDao,
+    private val sharedPreferencesHelper: SharedPreferencesHelper
 ) : EventRepository {
-    val TAG = "EventRepositoryImpl"
-    
+
     override suspend fun createEvent(event: Event): Event {
         return try {
-            // First, try to create event via API
-            val apiRequest = event.toCreateRequest()
-            android.util.Log.d(TAG, "🔍 Creating event via API: ${apiRequest}")
+            val request = CreateEventRequest(
+                title = event.title,
+                description = event.description,
+                eventTypeId = event.eventTypeId,
+                startDate = event.startDate,
+                location = event.location
+            )
             
-            val apiResponse = eventApiService.createEvent(apiRequest)
-            android.util.Log.d(TAG, "📡 API Response: success=${apiResponse.success}, message=${apiResponse.message}")
+            val apiResponse = eventApiService.createEvent(request)
             
             if (apiResponse.success) {
-                android.util.Log.d(TAG, "✅ API call successful, data: ${apiResponse.data}")
-                
                 val createdEvent = apiResponse.data.toDomain()
-                android.util.Log.d(TAG, "🔄 Converted to domain: id=${createdEvent.id}, title=${createdEvent.title}")
+                
+                // Ensure EventType exists in local database before saving event
+                val eventTypeExists = ensureEventTypeExists(createdEvent.eventTypeId)
                 
                 // Save to local database
-                val entity = createdEvent.toEntity()
+                val entity = createdEvent.toEntity(eventTypeExists)
                 todoDao.insertTodo(entity)
-                android.util.Log.d(TAG, "💾 Saved to local database with server ID: ${createdEvent.id}")
                 
-                // Return the created event with SERVER ID (not local ID)
+                // Return the created event with SERVER ID
                 createdEvent
             } else {
-                android.util.Log.e(TAG, "❌ API call failed: ${apiResponse.message}")
                 throw Exception(apiResponse.message)
             }
         } catch (e: Exception) {
-            android.util.Log.e(TAG, "💥 Exception in createEvent: ${e.message}", e)
-            android.util.Log.e(TAG, "❌ API creation failed, throwing exception instead of local fallback")
-            
-            // If API fails, throw exception instead of saving locally
             throw e
         }
     }
-    
-    override fun getAllEvents(): Flow<List<Event>> {
-        return todoDao.getAllTodos().map { entities ->
-            entities.toEventDomainList()
-        }
-    }
-    
-    override fun getEventById(id: Int): Flow<Event?> {
-        return todoDao.getTodoById(id.toLong()).map { entity ->
-            entity?.toDomain()
-        }
-    }
-    
-    override suspend fun getEventFromApi(id: Int): Event? {
-        return try {
-            val apiResponse = eventApiService.getEventById(id)
-            if (apiResponse.success) {
-                val event = apiResponse.data.toDomain()
-                
-                // Save to local database for caching
-                val entity = event.toEntity()
-                todoDao.insertTodo(entity)
-                
-                event
-            } else {
-                null
-            }
-        } catch (e: Exception) {
-            null
-        }
-    }
-    
-    override suspend fun updateEvent(event: Event) {
-        try {
-            // First, try to update via API
-            val apiRequest = event.toCreateRequest()
-            val apiResponse = eventApiService.updateEvent(event.id, apiRequest)
-            
-            if (apiResponse.success) {
-                // Update local database only if API succeeds
-                val entity = event.toEntity()
-                todoDao.updateTodo(entity)
-            } else {
-                throw Exception(apiResponse.message)
-            }
-        } catch (e: Exception) {
-            // If API fails, don't update local database
-            throw e // Re-throw to inform the caller
-        }
-    }
-    
-    override suspend fun deleteEvent(event: Event) {
-        val entity = event.toEntity()
-        todoDao.deleteTodo(entity)
-        
-        // Try to delete via API as well
-        try {
-            val apiResponse = eventApiService.deleteEvent(event.id)
-            if (!apiResponse.success) {
-                throw Exception(apiResponse.message)
-            }
-        } catch (e: Exception) {
-            // API delete failed, but local delete succeeded
-            // Could log this error or handle it as needed
-        }
-    }
-    
-    override suspend fun deleteEventById(id: Int) {
-        todoDao.deleteTodoById(id.toLong())
-        
-        // Try to delete via API as well
-        try {
-            val apiResponse = eventApiService.deleteEvent(id)
-            if (!apiResponse.success) {
-                throw Exception(apiResponse.message)
-            }
-        } catch (e: Exception) {
-            // API delete failed, but local delete succeeded
-            // Could log this error or handle it as needed
-        }
-    }
-    
-    override suspend fun fetchEventsFromApi(keyword: String?, typeId: Int?): List<Event> {
+
+    override suspend fun getEvents(keyword: String?, typeId: Int?): Flow<List<Event>> {
         return try {
             val apiResponse = eventApiService.getEvents(keyword, typeId)
             
             if (apiResponse.success) {
-                val eventsData = apiResponse.data["events"] as? List<Map<String, Any>>
-                val domainEvents = eventsData?.map { eventMap ->
-                    // Convert map to EventResponse then to domain
-                    val eventResponse = mapToEventResponse(eventMap)
-                    eventResponse.toDomain()
+                val events = (apiResponse.data["events"] as? List<Map<String, Any>>)?.map { eventMap ->
+                    eventMap.toEventResponse().toDomain()
                 } ?: emptyList()
                 
+                // Ensure all EventTypes exist in local database
+                events.forEach { event ->
+                    ensureEventTypeExists(event.eventTypeId)
+                }
+                
                 // Save to local database
-                domainEvents.forEach { event ->
+                events.forEach { event ->
                     val entity = event.toEntity()
                     todoDao.insertTodo(entity)
                 }
                 
-                domainEvents
+                kotlinx.coroutines.flow.flow { emit(events) }
             } else {
-                emptyList()
+                // Fallback to local database
+                todoDao.getAllTodos().map { entities ->
+                    entities.map { it.toDomain() }
+                }
             }
         } catch (e: Exception) {
-            emptyList()
+            // Fallback to local database
+            todoDao.getAllTodos().map { entities ->
+                entities.map { it.toDomain() }
+            }
         }
     }
-    
-    override suspend fun getEventTypes(): List<EventType> {
+
+    override suspend fun getEventById(id: Int): Flow<Event?> {
+        return try {
+            val apiResponse = eventApiService.getEventById(id)
+            
+            if (apiResponse.success) {
+                val event = apiResponse.data.toDomain()
+                
+                // Ensure EventType exists in local database
+                ensureEventTypeExists(event.eventTypeId)
+                
+                // Save to local database
+                val entity = event.toEntity()
+                todoDao.insertTodo(entity)
+                
+                kotlinx.coroutines.flow.flow { emit(event) }
+            } else {
+                // Fallback to local database
+                todoDao.getTodoById(id.toLong()).map { entity ->
+                    entity?.toDomain()
+                }
+            }
+        } catch (e: Exception) {
+            // Fallback to local database
+            todoDao.getTodoById(id.toLong()).map { entity ->
+                entity?.toDomain()
+            }
+        }
+    }
+
+    override suspend fun updateEvent(id: Int, title: String, description: String, typeId: Int, startDate: String, location: String): Result<Event> {
+        return try {
+            val request = CreateEventRequest(
+                title = title,
+                description = description,
+                eventTypeId = typeId,
+                startDate = startDate,
+                location = location
+            )
+            
+            val apiResponse = eventApiService.updateEvent(id, request)
+            
+            if (apiResponse.success) {
+                // Get the updated event from API
+                val updatedEventResponse = eventApiService.getEventById(id)
+                if (updatedEventResponse.success) {
+                    val updatedEvent = updatedEventResponse.data.toDomain()
+                    
+                    // Ensure EventType exists in local database
+                    val eventTypeExists = ensureEventTypeExists(updatedEvent.eventTypeId)
+                    
+                    // Update local database
+                    val entity = updatedEvent.toEntity(eventTypeExists)
+                    todoDao.updateTodo(entity)
+                    
+                    Result.success(updatedEvent)
+                } else {
+                    Result.failure(Exception("Failed to get updated event"))
+                }
+            } else {
+                Result.failure(Exception(apiResponse.message))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun deleteEvent(id: Int) {
+        try {
+            val apiResponse = eventApiService.deleteEvent(id)
+            
+            if (apiResponse.success) {
+                // Delete from local database
+                todoDao.deleteTodoById(id.toLong())
+            } else {
+                throw Exception(apiResponse.message)
+            }
+        } catch (e: Exception) {
+            throw e
+        }
+    }
+
+    override suspend fun getEventTypes(): Result<List<EventType>> {
         return try {
             val apiResponse = eventApiService.getEventTypes()
+            
             if (apiResponse.success) {
-                apiResponse.data.toEventTypeDomainList()
+                val eventTypes = apiResponse.data.map { it.toDomain() }
+                
+                // Save EventTypes to local database
+                eventTypes.forEach { eventType ->
+                    val entity = EventTypeEntity(
+                        id = eventType.id.toLong(),
+                        name = eventType.name
+                    )
+                    eventTypeDao.insertEventType(entity)
+                }
+                
+                Result.success(eventTypes)
             } else {
-                emptyList()
+                Result.failure(Exception(apiResponse.message))
             }
         } catch (e: Exception) {
-            emptyList()
+            Result.failure(e)
         }
     }
-    
+
     override suspend fun uploadEventImages(eventId: Int, imageFiles: List<File>): List<EventImage> {
         return try {
             // Prepare multipart files
@@ -202,7 +217,11 @@ class EventRepositoryImpl @Inject constructor(
             val apiResponse = eventApiService.uploadEventImages(eventId, multipartFiles)
             
             if (apiResponse.success) {
-                val uploadedImages = apiResponse.data.uploadedImages.toEventImageDomainList()
+                val uploadedImages = apiResponse.data.uploadedImages.map { apiImage ->
+                    // Create full URL using base URL + filePath
+                    val fullUrl = sharedPreferencesHelper.createFullImageUrl(apiImage.filePath)
+                    apiImage.toDomain().copy(url = fullUrl)
+                }
                 
                 // Update local event with new images
                 val currentEvent = getEventById(eventId).first()
@@ -234,32 +253,129 @@ class EventRepositoryImpl @Inject constructor(
     }
     
     /**
+     * Ensure EventType exists in local database
+     * If not, create a default one with the given ID
+     * Returns true if EventType exists or was created successfully, false otherwise
+     */
+    private suspend fun ensureEventTypeExists(typeId: Int): Boolean {
+        return try {
+            val existingEventType = eventTypeDao.getEventTypeById(typeId.toLong())
+            if (existingEventType == null) {
+                // Create a default EventType with the given ID
+                val defaultEventType = EventTypeEntity(
+                    id = typeId.toLong(),
+                    name = "Event Type $typeId"
+                )
+                eventTypeDao.insertEventType(defaultEventType)
+                true
+            } else {
+                true
+            }
+        } catch (e: Exception) {
+            // If there's an error, try to create a default EventType
+            try {
+                val defaultEventType = EventTypeEntity(
+                    id = typeId.toLong(),
+                    name = "Event Type $typeId"
+                )
+                eventTypeDao.insertEventType(defaultEventType)
+                true
+            } catch (insertError: Exception) {
+                // If insert fails, return false to indicate EventType doesn't exist
+                false
+            }
+        }
+    }
+    
+    /**
      * Helper function to convert map to EventResponse
      */
-    private fun mapToEventResponse(eventMap: Map<String, Any>): com.xdien.todoevent.data.api.EventResponse {
-        val images = (eventMap["images"] as? List<Map<String, Any>>)?.map { imageMap ->
-            com.xdien.todoevent.data.api.EventImage(
-                id = (imageMap["id"] as? Number)?.toInt() ?: 0,
-                eventId = (imageMap["eventId"] as? Number)?.toInt() ?: 0,
-                originalName = imageMap["originalName"] as? String ?: "",
-                filename = imageMap["filename"] as? String ?: "",
-                filePath = imageMap["filePath"] as? String ?: "",
-                fileSize = (imageMap["fileSize"] as? Number)?.toInt() ?: 0,
-                uploadedAt = imageMap["uploadedAt"] as? String ?: "",
-                url = imageMap["url"] as? String ?: ""
-            )
-        } ?: emptyList()
-        
-        return com.xdien.todoevent.data.api.EventResponse(
-            id = (eventMap["id"] as? Number)?.toInt() ?: 0,
-            title = eventMap["title"] as? String ?: "",
-            description = eventMap["description"] as? String ?: "",
-            typeId = (eventMap["typeId"] as? Number)?.toInt() ?: 1,
-            startDate = eventMap["startDate"] as? String ?: "",
-            location = eventMap["location"] as? String ?: "",
-            createdAt = eventMap["createdAt"] as? String ?: "",
-            updatedAt = eventMap["updatedAt"] as? String,
-            images = images
+    private fun Map<String, Any>.toEventResponse(): EventResponse {
+        return EventResponse(
+            id = (this["id"] as? Number)?.toInt() ?: 0,
+            title = this["title"] as? String,
+            description = this["description"] as? String,
+            eventTypeId = (this["typeId"] as? Number)?.toInt(),
+            startDate = this["startDate"] as? String,
+            location = this["location"] as? String,
+            createdAt = this["createdAt"] as? String,
+            updatedAt = this["updatedAt"] as? String,
+            images = (this["images"] as? List<Map<String, Any>>)?.map { imageMap ->
+                ApiEventImage(
+                    id = (imageMap["id"] as? Number)?.toInt() ?: 0,
+                    eventId = (imageMap["eventId"] as? Number)?.toInt() ?: 0,
+                    originalName = imageMap["originalName"] as? String ?: "",
+                    filename = imageMap["filename"] as? String ?: "",
+                    filePath = imageMap["filePath"] as? String ?: "",
+                    fileSize = (imageMap["fileSize"] as? Number)?.toInt() ?: 0,
+                    uploadedAt = imageMap["uploadedAt"] as? String ?: "",
+                    url = imageMap["url"] as? String ?: ""
+                )
+            }
         )
     }
+}
+
+// Extension functions for mapping between API and Domain models
+private fun EventResponse.toDomain(): Event {
+    return Event(
+        id = this.id,
+        title = this.title ?: "",
+        description = this.description ?: "",
+        eventTypeId = this.eventTypeId ?: 0,
+        startDate = this.startDate ?: "",
+        location = this.location ?: "",
+        createdAt = this.createdAt ?: "",
+        updatedAt = this.updatedAt,
+        images = this.images?.map { it.toDomain() } ?: emptyList()
+    )
+}
+
+private fun ApiEventImage.toDomain(): EventImage {
+    return EventImage(
+        id = this.id,
+        eventId = this.eventId,
+        originalName = this.originalName,
+        filename = this.filename,
+        filePath = this.filePath,
+        fileSize = this.fileSize,
+        uploadedAt = this.uploadedAt,
+        url = this.url
+    )
+}
+
+private fun ApiEventType.toDomain(): EventType {
+    return EventType(
+        id = this.id,
+        name = this.name,
+        description = this.description
+    )
+}
+
+// Simple mapping for TodoEntity (since it doesn't have all Event fields)
+private fun Event.toEntity(eventTypeExists: Boolean = true): TodoEntity {
+    return TodoEntity(
+        id = this.id.toLong(),
+        title = this.title,
+        description = this.description,
+        location = this.location,
+        eventTypeId = if (eventTypeExists) this.eventTypeId.toLong() else null, // Use null if EventType doesn't exist
+        eventTime = this.startDate.hashCode().toLong(), // Simple conversion
+        createdAt = System.currentTimeMillis(),
+        updatedAt = System.currentTimeMillis()
+    )
+}
+
+private fun TodoEntity.toDomain(): Event {
+    return Event(
+        id = this.id.toInt(),
+        title = this.title,
+        description = this.description ?: "",
+        eventTypeId = this.eventTypeId?.toInt() ?: 0,
+        startDate = this.eventTime?.toString() ?: "",
+        location = this.location ?: "",
+        createdAt = this.createdAt.toString(),
+        updatedAt = this.updatedAt.toString(),
+        images = emptyList() // TodoEntity doesn't store images
+    )
 } 

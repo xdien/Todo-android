@@ -2,6 +2,7 @@ package com.xdien.todoevent.di
 
 import android.content.Context
 import com.xdien.todoevent.data.dao.TodoDao
+import com.xdien.todoevent.data.dao.EventTypeDao
 import com.xdien.todoevent.data.database.TodoDatabase
 import dagger.Module
 import dagger.Provides
@@ -23,5 +24,10 @@ object DatabaseModule {
     @Provides
     fun provideTodoDao(database: TodoDatabase): TodoDao {
         return database.todoDao()
+    }
+    
+    @Provides
+    fun provideEventTypeDao(database: TodoDatabase): EventTypeDao {
+        return database.eventTypeDao()
     }
 } 

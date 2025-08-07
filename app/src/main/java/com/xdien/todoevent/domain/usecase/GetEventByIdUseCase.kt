@@ -22,31 +22,15 @@ class GetEventByIdUseCase @Inject constructor(
      */
     suspend operator fun invoke(id: Int): Result<Event> {
         return try {
-            // First try to get from API
-            val apiEvent = eventRepository.getEventFromApi(id)
-            if (apiEvent != null) {
-                Result.success(apiEvent)
+            // Try to get from API first, then local database
+            val event = eventRepository.getEventById(id).first()
+            if (event != null) {
+                Result.success(event)
             } else {
-                // If API doesn't have the event, try local database
-                val localEvent = eventRepository.getEventById(id).first()
-                if (localEvent != null) {
-                    Result.success(localEvent)
-                } else {
-                    Result.failure(Exception("Event not found"))
-                }
+                Result.failure(Exception("Event not found"))
             }
         } catch (e: Exception) {
-            // If API fails, try local database
-            try {
-                val localEvent = eventRepository.getEventById(id).first()
-                if (localEvent != null) {
-                    Result.success(localEvent)
-                } else {
-                    Result.failure(Exception("Event not found"))
-                }
-            } catch (localError: Exception) {
-                Result.failure(localError)
-            }
+            Result.failure(e)
         }
     }
 }

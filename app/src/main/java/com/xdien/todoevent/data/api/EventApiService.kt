@@ -7,7 +7,7 @@ import retrofit2.http.*
 data class CreateEventRequest(
     val title: String,
     val description: String,
-    val typeId: Int,
+    val eventTypeId: Int,
     val startDate: String,
     val location: String
 )
@@ -17,7 +17,7 @@ data class EventResponse(
     val id: Int,
     val title: String?,
     val description: String?,
-    val typeId: Int?,
+    val eventTypeId: Int?,
     val startDate: String?,
     val location: String?,
     val createdAt: String?,

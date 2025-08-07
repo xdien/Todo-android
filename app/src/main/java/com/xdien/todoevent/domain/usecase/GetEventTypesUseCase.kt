@@ -20,8 +20,8 @@ class GetEventTypesUseCase @Inject constructor(
      */
     suspend operator fun invoke(): Result<List<EventType>> {
         return try {
-            val eventTypes = eventRepository.getEventTypes()
-            Result.success(eventTypes)
+            val result = eventRepository.getEventTypes()
+            result
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -35,13 +35,18 @@ class GetEventTypesUseCase @Inject constructor(
      */
     suspend fun getEventTypeById(typeId: Int): Result<EventType> {
         return try {
-            val eventTypes = eventRepository.getEventTypes()
-            val eventType = eventTypes.find { it.id == typeId }
-            if (eventType != null) {
-                Result.success(eventType)
-            } else {
-                Result.failure(IllegalArgumentException("Event type not found with ID: $typeId"))
+            val result = eventRepository.getEventTypes()
+            result.onSuccess { eventTypes ->
+                val eventType = eventTypes.find { it.id == typeId }
+                if (eventType != null) {
+                    return Result.success(eventType)
+                } else {
+                    return Result.failure(IllegalArgumentException("Event type not found with ID: $typeId"))
+                }
+            }.onFailure { error ->
+                return Result.failure(error)
             }
+            Result.failure(Exception("Unknown error"))
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -55,13 +60,18 @@ class GetEventTypesUseCase @Inject constructor(
      */
     suspend fun getEventTypeByName(name: String): Result<EventType> {
         return try {
-            val eventTypes = eventRepository.getEventTypes()
-            val eventType = eventTypes.find { it.name.equals(name, ignoreCase = true) }
-            if (eventType != null) {
-                Result.success(eventType)
-            } else {
-                Result.failure(IllegalArgumentException("Event type not found with name: $name"))
+            val result = eventRepository.getEventTypes()
+            result.onSuccess { eventTypes ->
+                val eventType = eventTypes.find { it.name.equals(name, ignoreCase = true) }
+                if (eventType != null) {
+                    return Result.success(eventType)
+                } else {
+                    return Result.failure(IllegalArgumentException("Event type not found with name: $name"))
+                }
+            }.onFailure { error ->
+                return Result.failure(error)
             }
+            Result.failure(Exception("Unknown error"))
         } catch (e: Exception) {
             Result.failure(e)
         }

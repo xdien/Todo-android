@@ -80,7 +80,7 @@ class EventFormViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(
                         title = event.title,
                         description = event.description,
-                        typeId = event.typeId,
+                        typeId = event.eventTypeId,
                         startDate = event.startDate,
                         location = event.location,
                         isLoading = false,
@@ -109,7 +109,8 @@ class EventFormViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
             
-            getEventTypesUseCase().onSuccess { types ->
+            val result = eventRepository.getEventTypes()
+            result.onSuccess { types ->
                 _eventTypes.value = types
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -367,7 +368,7 @@ class EventFormViewModel @Inject constructor(
                 val createdEvent = currentState.createdEvent
                 
                 if (createdEvent != null) {
-                    // Update the event with uploaded images
+                    // Update the event with uploaded images (images already have full URLs)
                     val eventWithImages = createdEvent.copy(images = images)
                     _uiState.value = currentState.copy(
                         isLoading = false,
@@ -375,6 +376,9 @@ class EventFormViewModel @Inject constructor(
                         createdEvent = eventWithImages,
                         error = null
                     )
+                    
+                    // Update current event for UI display
+                    _currentEvent.value = eventWithImages
                 } else {
                     // Fallback if createdEvent is null
                     _uiState.value = currentState.copy(

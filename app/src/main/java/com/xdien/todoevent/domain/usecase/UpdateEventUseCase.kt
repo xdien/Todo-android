@@ -27,8 +27,15 @@ class UpdateEventUseCase @Inject constructor(
             }
             
             // Update event through repository (API first, local DB only if API succeeds)
-            eventRepository.updateEvent(event)
-            Result.success(event)
+            val result = eventRepository.updateEvent(
+                id = event.id,
+                title = event.title,
+                description = event.description,
+                typeId = event.eventTypeId,
+                startDate = event.startDate,
+                location = event.location
+            )
+            result
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -57,7 +64,7 @@ class UpdateEventUseCase @Inject constructor(
             id = id,
             title = title,
             description = description,
-            typeId = typeId,
+            eventTypeId = typeId,
             startDate = startDate,
             location = location
         )
