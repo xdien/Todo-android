@@ -15,7 +15,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import com.xdien.todoevent.data.entity.TodoEntity
+import com.xdien.todoevent.domain.model.Event
 import com.xdien.todoevent.ui.viewmodel.TodoViewModel
 import java.text.SimpleDateFormat
 import java.util.*
@@ -24,9 +24,9 @@ import java.util.*
 fun EventListScreen(
     modifier: Modifier = Modifier,
     viewModel: TodoViewModel = hiltViewModel(),
-    onEventClick: (TodoEntity) -> Unit = {}
+    onEventClick: (Event) -> Unit = {}
 ) {
-    val todos by viewModel.todos.collectAsState()
+    val events by viewModel.events.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     
     Column(modifier = modifier.fillMaxSize()) {
@@ -37,7 +37,7 @@ fun EventListScreen(
             ) {
                 CircularProgressIndicator()
             }
-        } else if (todos.isEmpty()) {
+        } else if (events.isEmpty()) {
             EmptyState()
         } else {
             LazyColumn(
@@ -45,11 +45,10 @@ fun EventListScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(todos) { todo ->
+                items(events) { event ->
                     EventCard(
-
-                        event = todo,
-                        onClick = { onEventClick(todo) }
+                        event = event,
+                        onClick = { onEventClick(event) }
                     )
                 }
             }
@@ -59,7 +58,7 @@ fun EventListScreen(
 
 @Composable
 fun EventCard(
-    event: TodoEntity,
+    event: Event,
     onClick: () -> Unit
 ) {
     Card(
@@ -72,10 +71,10 @@ fun EventCard(
         Row(
             modifier = Modifier.fillMaxSize()
         ) {
-            // Thumbnail
+            // Thumbnail - use first image from images or placeholder
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
-                    .data(event.thumbnailUrl ?: "https://via.placeholder.com/120x120")
+                    .data(event.images.firstOrNull()?.url ?: "https://via.placeholder.com/120x120")
                     .crossfade(true)
                     .build(),
                 contentDescription = "Event thumbnail",
@@ -106,15 +105,13 @@ fun EventCard(
                 Column(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    event.eventTime?.let { time ->
-                        Text(
-                            text = formatEventTime(time),
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                fontSize = 14.sp
-                            ),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text(
+                        text = formatEventTimeFromString(event.startDate),
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = 14.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     
                     event.location?.let { location ->
                         Text(
@@ -159,4 +156,16 @@ fun EmptyState() {
 private fun formatEventTime(timestamp: Long): String {
     val dateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
     return dateFormat.format(Date(timestamp))
+}
+
+private fun formatEventTimeFromString(dateTimeString: String): String {
+    return try {
+        val formatter = java.time.format.DateTimeFormatter.ISO_DATE_TIME
+        val zonedDateTime = java.time.ZonedDateTime.parse(dateTimeString, formatter)
+        val localDateTime = zonedDateTime.toLocalDateTime()
+        val dateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
+        dateFormat.format(Date.from(zonedDateTime.toInstant()))
+    } catch (e: Exception) {
+        dateTimeString // Return original string if parsing fails
+    }
 } 

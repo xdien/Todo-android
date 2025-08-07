@@ -20,8 +20,8 @@ fun ChipListDemoScreen(
     viewModel: TodoViewModel,
     modifier: Modifier = Modifier
 ) {
-    val selectedTodos by viewModel.selectedChipIds.collectAsState()
-    val selectedTodosList = viewModel.getSelectedTodos()
+    val selectedEvents by viewModel.selectedChipIds.collectAsState()
+    val selectedEventsList = viewModel.getSelectedEvents()
     
     Column(
         modifier = modifier
@@ -63,7 +63,7 @@ fun ChipListDemoScreen(
         )
         
         // Selected Items Display
-        if (selectedTodos.isNotEmpty()) {
+        if (selectedEvents.isNotEmpty()) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -80,9 +80,9 @@ fun ChipListDemoScreen(
                         fontWeight = FontWeight.Bold
                     )
                     
-                    selectedTodosList.forEach { todo ->
+                    selectedEventsList.forEach { event ->
                         Text(
-                            text = "• ${todo.title}",
+                            text = "• ${event.title}",
                             style = MaterialTheme.typography.bodyMedium
                         )
                     }
@@ -103,7 +103,7 @@ fun ChipListDemoScreen(
             }
             
             Button(
-                onClick = { viewModel.loadTodos() },
+                onClick = { viewModel.loadEvents() },
                 modifier = Modifier.weight(1f)
             ) {
                 Text("Tải lại")

@@ -1,6 +1,6 @@
 package com.xdien.todoevent.common
 
-import com.xdien.todoevent.data.api.TodoApiService
+
 import com.xdien.todoevent.data.api.EventApiService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import okhttp3.OkHttpClient
@@ -16,7 +16,7 @@ class NetworkManager @Inject constructor(
     private val sharedPreferencesHelper: SharedPreferencesHelper
 ) {
     private var retrofit: Retrofit? = null
-    private var todoApiService: TodoApiService? = null
+
     private var eventApiService: EventApiService? = null
 
     private fun createRetrofit(baseUrl: String): Retrofit {
@@ -35,17 +35,7 @@ class NetworkManager @Inject constructor(
             .build()
     }
 
-    fun getTodoApiService(): TodoApiService {
-        val currentUrl = sharedPreferencesHelper.getApiUrl()
-        
-        // Check if we need to recreate the service
-        if (retrofit == null || todoApiService == null) {
-            retrofit = createRetrofit(currentUrl)
-            todoApiService = retrofit!!.create(TodoApiService::class.java)
-        }
-        
-        return todoApiService!!
-    }
+
     
     fun getEventApiService(): EventApiService {
         val currentUrl = sharedPreferencesHelper.getApiUrl()
@@ -63,7 +53,6 @@ class NetworkManager @Inject constructor(
         sharedPreferencesHelper.saveApiUrl(newUrl)
         // Force recreation of Retrofit instance
         retrofit = null
-        todoApiService = null
         eventApiService = null
     }
 } 

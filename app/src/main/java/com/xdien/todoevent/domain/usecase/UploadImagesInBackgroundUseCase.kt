@@ -55,7 +55,7 @@ class UploadImagesInBackgroundUseCase @Inject constructor(
                 var uploadedCount = 0
                 val totalImages = imageFiles.size
                 val failedImages = mutableListOf<String>()
-                
+
                 Log.d("UploadImagesInBackgroundUseCase", "Starting upload loop for $totalImages images")
                 
                 // Upload images one by one to track progress
@@ -70,7 +70,7 @@ class UploadImagesInBackgroundUseCase @Inject constructor(
                         uploadedCount++
                         
                         Log.d("UploadImagesInBackgroundUseCase", "Successfully uploaded image: ${imageFile.name}, result count: ${result.size}")
-                        
+                        result
                         withContext(Dispatchers.Main) {
                             onProgress(uploadedCount, totalImages)
                         }

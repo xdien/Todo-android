@@ -106,21 +106,21 @@ fun ChipItem(
     )
 }
 
-// Extension function to convert TodoEntity list to ChipItem list
-fun List<com.xdien.todoevent.data.entity.TodoEntity>.toChipItems(
+// Extension function to convert Event list to ChipItem list
+fun List<com.xdien.todoevent.domain.model.Event>.toChipItems(
     selectedIds: Set<Long> = emptySet()
 ): List<ChipItem> {
-    return this.map { todo ->
+    return this.map { event ->
         ChipItem(
-            id = todo.id.toString(),
-            title = todo.title,
-            isSelected = selectedIds.contains(todo.id),
-            color = when (todo.eventTypeId) {
-                1L -> Color(0xFF2196F3) // Blue - Meeting
-                2L -> Color(0xFF4CAF50) // Green - Work
-                3L -> Color(0xFFFF9800) // Orange - Personal
-                4L -> Color(0xFF9C27B0) // Purple - Party
-                5L -> Color(0xFFE91E63) // Pink - Conference
+            id = event.id.toString(),
+            title = event.title,
+            isSelected = selectedIds.contains(event.id.toLong()),
+            color = when (event.eventTypeId) {
+                1 -> Color(0xFF2196F3) // Blue - Meeting
+                2 -> Color(0xFF4CAF50) // Green - Work
+                3 -> Color(0xFFE91E63) // Pink - Personal
+                4 -> Color(0xFF9C27B0) // Purple - Party
+                5 -> Color(0xFFFF9800) // Orange - Conference
                 else -> null
             }
         )

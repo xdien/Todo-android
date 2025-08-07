@@ -23,7 +23,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.xdien.todoevent.common.NetworkManager
 import com.xdien.todoevent.common.SharedPreferencesHelper
-import com.xdien.todoevent.data.repository.SyncResult
+
 import com.xdien.todoevent.ui.components.ApiSettingsDialog
 import com.xdien.todoevent.ui.components.ChipItem
 import com.xdien.todoevent.ui.screens.PersonalEventListCompose
@@ -48,8 +48,7 @@ class PersonalEventComposeActivity : ComponentActivity() {
         setContent {
             TodoEventTheme {
                 val viewModel: TodoViewModel = hiltViewModel()
-                val eventsWithTypes by viewModel.todosWithEventType.collectAsState()
-                val syncResult by viewModel.syncResult.collectAsState()
+                val events by viewModel.events.collectAsState()
                 
                 // Search state
                 var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -65,44 +64,24 @@ class PersonalEventComposeActivity : ComponentActivity() {
                 // Snackbar state
                 val snackbarHostState = remember { SnackbarHostState() }
                 
-                // Show sync result message
-                LaunchedEffect(syncResult) {
-                    syncResult?.let { result ->
-                        when (result) {
-                            is SyncResult.Success -> {
-                                snackbarHostState.showSnackbar(
-                                    message = "Đồng bộ thành công: ${result.itemCount} sự kiện",
-                                    duration = SnackbarDuration.Short
-                                )
-                            }
-                            is SyncResult.Error -> {
-                                snackbarHostState.showSnackbar(
-                                    message = "Lỗi đồng bộ: ${result.message}",
-                                    duration = SnackbarDuration.Long
-                                )
-                            }
-                        }
-                        // Clear sync result after showing
-                        viewModel.clearSyncResult()
-                    }
-                }
+
                 
                 // Create chip items for event types
-                val eventTypeChips = remember(eventsWithTypes) {
-                    val eventTypes = eventsWithTypes
-                        .mapNotNull { it.eventType?.name }
+                val eventTypeChips = remember(events) {
+                    val eventTypes = events
+                        .map { it.eventTypeId }
                         .distinct()
-                    eventTypes.map { eventTypeName ->
+                    eventTypes.map { eventTypeId ->
                         ChipItem(
-                            id = eventTypeName,
-                            title = eventTypeName,
-                            isSelected = selectedEventTypes.contains(eventTypeName),
-                            color = when (eventTypeName) {
-                                "Meeting" -> Color(0xFF2196F3) // Blue
-                                "Work" -> Color(0xFF4CAF50) // Green
-                                "Personal" -> Color(0xFFFF9800) // Orange
-                                "Party" -> Color(0xFF9C27B0) // Purple
-                                "Conference" -> Color(0xFFE91E63) // Pink
+                            id = eventTypeId.toString(),
+                            title = "Type $eventTypeId",
+                            isSelected = selectedEventTypes.contains(eventTypeId.toString()),
+                            color = when (eventTypeId) {
+                                1 -> Color(0xFF2196F3) // Blue - Meeting
+                                2 -> Color(0xFF4CAF50) // Green - Work
+                                3 -> Color(0xFFE91E63) // Pink - Personal
+                                4 -> Color(0xFF9C27B0) // Purple - Party
+                                5 -> Color(0xFFFF9800) // Orange - Conference
                                 else -> null
                             }
                         )
@@ -110,16 +89,15 @@ class PersonalEventComposeActivity : ComponentActivity() {
                 }
                 
                 // Filter events based on search query and selected event types
-                val filteredEvents = remember(eventsWithTypes, searchQuery, selectedEventTypes) {
-                    eventsWithTypes.filter { eventWithType ->
-                        val event = eventWithType.todo
+                val filteredEvents = remember(events, searchQuery, selectedEventTypes) {
+                    events.filter { event ->
                         val matchesSearch = searchQuery.isEmpty() || 
                             event.title.contains(searchQuery, ignoreCase = true) ||
-                            (event.description?.contains(searchQuery, ignoreCase = true) == true) ||
-                            (event.location?.contains(searchQuery, ignoreCase = true) == true)
+                            event.description.contains(searchQuery, ignoreCase = true) ||
+                            event.location.contains(searchQuery, ignoreCase = true)
                         
                         val matchesFilter = selectedEventTypes.isEmpty() || 
-                            (eventWithType.eventType?.name != null && selectedEventTypes.contains(eventWithType.eventType!!.name))
+                            selectedEventTypes.contains(event.eventTypeId.toString())
                         
                         matchesSearch && matchesFilter
                     }
@@ -241,10 +219,10 @@ class PersonalEventComposeActivity : ComponentActivity() {
                                 .fillMaxSize()
                                 .padding(top = if (eventTypeChips.isNotEmpty()) 120.dp else 80.dp),
                             viewModel = viewModel,
-                            filteredEvents = filteredEvents.map { it.todo },
+                            filteredEvents = filteredEvents,
                             onEventClick = { event ->
                                 // Navigate to event detail screen
-                                startActivity(EventDetailActivity.createIntent(this@PersonalEventComposeActivity, event.id))
+                                startActivity(EventDetailActivity.createIntent(this@PersonalEventComposeActivity, event.id.toLong()))
                             },
                             onAddEventClick = {
                                 // Navigate to add event screen
@@ -262,7 +240,7 @@ class PersonalEventComposeActivity : ComponentActivity() {
                                     networkManager.updateApiUrl(newApiUrl)
                                     currentApiUrl = newApiUrl
                                     // Refresh data with new API URL
-                                    viewModel.refreshTodos()
+                                    viewModel.refreshEvents()
                                 }
                             )
                         }

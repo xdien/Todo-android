@@ -18,13 +18,13 @@ import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import com.xdien.todoevent.data.entity.TodoEntity
+import com.xdien.todoevent.domain.model.Event
 import java.text.SimpleDateFormat
 import java.util.*
 
 class PersonalEventAdapter(
-    private val onEventClick: (TodoEntity) -> Unit
-) : ListAdapter<TodoEntity, PersonalEventAdapter.EventViewHolder>(EventDiffCallback()) {
+    private val onEventClick: (Event) -> Unit
+) : ListAdapter<Event, PersonalEventAdapter.EventViewHolder>(EventDiffCallback()) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): EventViewHolder {
         val composeView = ComposeView(parent.context)
@@ -37,10 +37,10 @@ class PersonalEventAdapter(
 
     class EventViewHolder(
         private val composeView: ComposeView,
-        private val onEventClick: (TodoEntity) -> Unit
+        private val onEventClick: (Event) -> Unit
     ) : RecyclerView.ViewHolder(composeView) {
         
-        fun bind(event: TodoEntity) {
+        fun bind(event: Event) {
             composeView.setContent {
                 EventCard(
                     event = event,
@@ -50,12 +50,12 @@ class PersonalEventAdapter(
         }
     }
     
-    private class EventDiffCallback : DiffUtil.ItemCallback<TodoEntity>() {
-        override fun areItemsTheSame(oldItem: TodoEntity, newItem: TodoEntity): Boolean {
+    private class EventDiffCallback : DiffUtil.ItemCallback<Event>() {
+        override fun areItemsTheSame(oldItem: Event, newItem: Event): Boolean {
             return oldItem.id == newItem.id
         }
         
-        override fun areContentsTheSame(oldItem: TodoEntity, newItem: TodoEntity): Boolean {
+        override fun areContentsTheSame(oldItem: Event, newItem: Event): Boolean {
             return oldItem == newItem
         }
     }
@@ -63,7 +63,7 @@ class PersonalEventAdapter(
 
 @Composable
 fun EventCard(
-    event: TodoEntity,
+    event: Event,
     onClick: () -> Unit
 ) {
     Card(
@@ -82,7 +82,7 @@ fun EventCard(
             // Thumbnail Image
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
-                    .data(event.thumbnailUrl ?: "https://via.placeholder.com/120x120")
+                    .data(event.images.firstOrNull()?.url ?: "https://via.placeholder.com/120x120")
                     .crossfade(true)
                     .build(),
                 contentDescription = "Event thumbnail",
@@ -113,9 +113,9 @@ fun EventCard(
                 Column(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    event.eventTime?.let { time ->
+                    event.startDate?.let { startDate ->
                         Text(
-                            text = formatEventTime(time),
+                            text = formatEventTime(startDate),
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 fontSize = 14.sp
                             ),
@@ -139,7 +139,13 @@ fun EventCard(
     }
 }
 
-private fun formatEventTime(timestamp: Long): String {
-    val dateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
-    return dateFormat.format(Date(timestamp))
+private fun formatEventTime(dateTimeString: String): String {
+    return try {
+        val formatter = java.time.format.DateTimeFormatter.ISO_DATE_TIME
+        val zonedDateTime = java.time.ZonedDateTime.parse(dateTimeString, formatter)
+        val dateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
+        dateFormat.format(Date.from(zonedDateTime.toInstant()))
+    } catch (e: Exception) {
+        dateTimeString
+    }
 } 

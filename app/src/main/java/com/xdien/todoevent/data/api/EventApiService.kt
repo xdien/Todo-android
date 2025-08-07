@@ -15,14 +15,14 @@ data class CreateEventRequest(
 // Event response model (matching mock server)
 data class EventResponse(
     val id: Int,
-    val title: String?,
-    val description: String?,
-    val eventTypeId: Int?,
-    val startDate: String?,
-    val location: String?,
-    val createdAt: String?,
+    val title: String,
+    val description: String,
+    val eventTypeId: Int,
+    val startDate: String,
+    val location: String,
+    val createdAt: String,
     val updatedAt: String?,
-    val images: List<EventImage>?
+    val images: List<EventImage>
 )
 
 // Event image model
@@ -31,10 +31,21 @@ data class EventImage(
     val eventId: Int,
     val originalName: String,
     val filename: String,
-    val filePath: String?, // Allow null for filePath
+    val filePath: String,
     val fileSize: Int,
-    val uploadedAt: String,
-    val url: String?
+    val uploadedAt: String
+)
+
+// New API response models for events list
+data class EventsListResponse(
+    val events: List<EventResponse>,
+    val filters: EventFilters,
+    val total: Int
+)
+
+data class EventFilters(
+    val eventTypeId: Int?,
+    val keyword: String?
 )
 
 // Event type model (matching mock server)
@@ -80,7 +91,7 @@ interface EventApiService {
     suspend fun getEvents(
         @Query("q") keyword: String? = null,
         @Query("typeId") typeId: Int? = null
-    ): ApiResponse<Map<String, Any>>
+    ): ApiResponse<EventsListResponse>
     
     /**
      * Get event by ID

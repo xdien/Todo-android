@@ -24,7 +24,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import com.xdien.todoevent.data.entity.TodoEntity
+import com.xdien.todoevent.domain.model.Event
 import com.xdien.todoevent.ui.viewmodel.TodoViewModel
 import java.text.SimpleDateFormat
 import java.util.*
@@ -38,12 +38,16 @@ fun EventDetailScreen(
     viewModel: TodoViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    val event by viewModel.getTodoById(eventId).collectAsStateWithLifecycle(initialValue = null)
-    var showDeleteDialog by remember { mutableStateOf(false) }
+    var event by remember { mutableStateOf<Event?>(null) }
     
     LaunchedEffect(eventId) {
-        viewModel.loadTodoById(eventId)
+        viewModel.getEventById(eventId.toInt()).collect { eventData ->
+            event = eventData
+        }
     }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    
+
     
     Scaffold(
         topBar = {
@@ -72,7 +76,7 @@ fun EventDetailScreen(
             ) {
                 // Edit FAB
                 FloatingActionButton(
-                    onClick = { event?.let { onNavigateToEdit(it.id) } },
+                    onClick = { event?.let { onNavigateToEdit(it.id.toLong()) } },
                     containerColor = MaterialTheme.colorScheme.secondary
                 ) {
                     Icon(Icons.Default.Edit, contentDescription = "Chỉnh sửa")
@@ -88,7 +92,7 @@ fun EventDetailScreen(
             }
         }
     ) { paddingValues ->
-        event?.let { todo ->
+        event?.let { event ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -97,7 +101,7 @@ fun EventDetailScreen(
             ) {
                 // Image Carousel
                 ImageCarousel(
-                    images = todo.galleryImages ?: listOfNotNull(todo.thumbnailUrl),
+                    images = event.images.map { it.url },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(300.dp)
@@ -105,7 +109,7 @@ fun EventDetailScreen(
                 
                 // Event Details
                 EventDetails(
-                    event = todo,
+                    event = event,
                     modifier = Modifier.padding(16.dp)
                 )
             }
@@ -129,9 +133,9 @@ fun EventDetailScreen(
             title = { Text("Xác nhận xóa") },
             text = { Text("Bạn có chắc chắn muốn xóa sự kiện này không?") },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        event?.let { viewModel.deleteTodo(it) }
+                                    TextButton(
+                        onClick = {
+                            event?.let { viewModel.deleteEvent(it.id) }
                         showDeleteDialog = false
                         onNavigateBack()
                     }
@@ -223,7 +227,7 @@ class ImagePagerAdapter(private val images: List<String>) :
 
 @Composable
 fun EventDetails(
-    event: TodoEntity,
+    event: Event,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -237,31 +241,26 @@ fun EventDetails(
             fontWeight = FontWeight.Bold
         )
         
-        // Event Type Badge - TODO: Update to use EventType relationship
-        event.eventTypeId?.let { typeId ->
-            Card(
-                modifier = Modifier.wrapContentWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
-            ) {
-                Text(
-                    text = "Type ID: $typeId", // TODO: Get actual type name from EventTypeEntity
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
+        // Event Type Badge
+        Card(
+            modifier = Modifier.wrapContentWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer
+            )
+        ) {
+            Text(
+                text = "Type ID: ${event.eventTypeId}",
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
         }
         
         // Time Information
-        event.eventTime?.let { time ->
-            TimeInfo(
-                startTime = time,
-                endTime = event.eventEndTime,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
+        TimeInfo(
+            startTime = event.startDate,
+            modifier = Modifier.fillMaxWidth()
+        )
         
         // Location
         event.location?.let { location ->
@@ -272,12 +271,10 @@ fun EventDetails(
         }
         
         // Description
-        event.description?.let { description ->
-            DescriptionInfo(
-                description = description,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
+        DescriptionInfo(
+            description = event.description,
+            modifier = Modifier.fillMaxWidth()
+        )
         
         // Additional Info
         AdditionalInfo(
@@ -289,8 +286,7 @@ fun EventDetails(
 
 @Composable
 fun TimeInfo(
-    startTime: Long,
-    endTime: Long?,
+    startTime: String,
     modifier: Modifier = Modifier
 ) {
     val dateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
@@ -323,17 +319,10 @@ fun TimeInfo(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = dateFormat.format(Date(startTime)),
+                    text = startTime,
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium
                 )
-                endTime?.let { end ->
-                    Text(
-                        text = "Đến: ${dateFormat.format(Date(end))}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
             }
         }
     }
@@ -413,7 +402,7 @@ fun DescriptionInfo(
 
 @Composable
 fun AdditionalInfo(
-    event: TodoEntity,
+    event: Event,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -434,23 +423,7 @@ fun AdditionalInfo(
             )
             Spacer(modifier = Modifier.height(8.dp))
             
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "Trạng thái:",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Text(
-                    text = if (event.isCompleted) "Đã hoàn thành" else "Chưa hoàn thành",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (event.isCompleted) 
-                        MaterialTheme.colorScheme.primary 
-                    else 
-                        MaterialTheme.colorScheme.error
-                )
-            }
+
             
             Spacer(modifier = Modifier.height(4.dp))
             
@@ -463,8 +436,7 @@ fun AdditionalInfo(
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Text(
-                    text = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
-                        .format(Date(event.createdAt)),
+                    text = event.createdAt,
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
@@ -472,15 +444,13 @@ fun AdditionalInfo(
     }
 }
 
-private fun shareEvent(context: android.content.Context, event: TodoEntity) {
+private fun shareEvent(context: android.content.Context, event: Event) {
     val shareText = buildString {
         appendLine("Sự kiện: ${event.title}")
-        event.description?.let { appendLine("Mô tả: $it") }
-        event.eventTime?.let { 
-            appendLine("Thời gian: ${SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(it))}")
-        }
-        event.location?.let { appendLine("Địa điểm: $it") }
-        event.eventTypeId?.let { appendLine("Loại sự kiện ID: $it") } // TODO: Get actual type name
+        appendLine("Mô tả: ${event.description}")
+        appendLine("Thời gian: ${event.startDate}")
+        appendLine("Địa điểm: ${event.location}")
+        appendLine("Loại sự kiện ID: ${event.eventTypeId}")
     }
     
     val sendIntent = android.content.Intent().apply {
