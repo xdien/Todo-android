@@ -82,9 +82,12 @@ fun EventCard(
                 .padding(16.dp)
         ) {
             // Thumbnail Image
+            val imageUrl = event.images.firstOrNull()?.url ?: "https://via.placeholder.com/120x120"
+            android.util.Log.d("EventCard", "Event: ${event.title}, Image URL: $imageUrl, Images count: ${event.images.size}")
+            
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
-                    .data(event.images.firstOrNull()?.url ?: "https://via.placeholder.com/120x120")
+                    .data(imageUrl)
                     .crossfade(true)
                     .build(),
                 contentDescription = "Event thumbnail",

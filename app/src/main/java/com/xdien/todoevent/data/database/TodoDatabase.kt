@@ -8,6 +8,7 @@ import com.xdien.todoevent.data.dao.EventTypeDao
 import com.xdien.todoevent.data.entity.EventTypeEntity
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(
@@ -37,6 +38,27 @@ abstract class TodoDatabase : RoomDatabase() {
     }
     
     companion object {
+        // Migration from version 4 to version 1
+        val MIGRATION_4_1 = object : Migration(4, 1) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Drop all tables and recreate them
+                database.execSQL("DROP TABLE IF EXISTS event_type")
+                database.execSQL("""
+                    CREATE TABLE event_type (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        name TEXT NOT NULL
+                    )
+                """)
+                
+                // Recreate default data
+                database.execSQL("INSERT INTO event_type (name) VALUES ('Meeting')")
+                database.execSQL("INSERT INTO event_type (name) VALUES ('Party')")
+                database.execSQL("INSERT INTO event_type (name) VALUES ('Conference')")
+                database.execSQL("INSERT INTO event_type (name) VALUES ('Personal')")
+                database.execSQL("INSERT INTO event_type (name) VALUES ('Work')")
+            }
+        }
+        
         @Volatile
         private var INSTANCE: TodoDatabase? = null
         
@@ -47,6 +69,7 @@ abstract class TodoDatabase : RoomDatabase() {
                     TodoDatabase::class.java,
                     "todo_database"
                 )
+                .fallbackToDestructiveMigration(true) // Allow destructive migration to handle version conflicts
                 .addCallback(object : RoomDatabase.Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
                         super.onCreate(db)

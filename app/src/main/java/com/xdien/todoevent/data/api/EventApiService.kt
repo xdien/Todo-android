@@ -1,5 +1,6 @@
 package com.xdien.todoevent.data.api
 
+import com.xdien.todoevent.common.SharedPreferencesHelper
 import okhttp3.MultipartBody
 import retrofit2.http.*
 
@@ -34,7 +35,11 @@ data class EventImage(
     val filePath: String?,
     val fileSize: Int?,
     val uploadedAt: String?
-)
+) {
+    fun getImageUrl(sharedPreferencesHelper: SharedPreferencesHelper): String {
+        return sharedPreferencesHelper.createFullImageUrl(filePath) ?: "https://via.placeholder.com/120x120"
+    }
+}
 
 // New API response models for events list
 data class EventsListResponse(

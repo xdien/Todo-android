@@ -44,7 +44,7 @@ class EventRepositoryImpl @Inject constructor(
             val apiResponse = eventApiService.createEvent(request)
             
             if (apiResponse.success) {
-                val createdEvent = apiResponse.data.toDomain()
+                val createdEvent = apiResponse.data.toDomain(sharedPreferencesHelper)
                 
                 // Ensure EventType exists in local database
                 ensureEventTypeExists(createdEvent.eventTypeId)
@@ -71,7 +71,7 @@ class EventRepositoryImpl @Inject constructor(
                 Log.d("EventRepositoryImpl", "API data events count: ${apiResponse.data.events.size}")
                 val events = apiResponse.data.events.map { eventResponse ->
                     Log.d("EventRepositoryImpl", "Mapping event: ${eventResponse.title} (ID: ${eventResponse.id})")
-                    eventResponse.toDomain()
+                    eventResponse.toDomain(sharedPreferencesHelper)
                 }
                 
                 Log.d("EventRepositoryImpl", "Mapped ${events.size} events to domain models")
@@ -102,7 +102,7 @@ class EventRepositoryImpl @Inject constructor(
             val apiResponse = eventApiService.getEventById(id)
             
             if (apiResponse.success) {
-                val event = apiResponse.data.toDomain()
+                val event = apiResponse.data.toDomain(sharedPreferencesHelper)
                 
                 // Ensure EventType exists in local database
                 ensureEventTypeExists(event.eventTypeId)
@@ -134,7 +134,7 @@ class EventRepositoryImpl @Inject constructor(
                 // Get the updated event from API
                 val updatedEventResponse = eventApiService.getEventById(id)
                 if (updatedEventResponse.success) {
-                    val updatedEvent = updatedEventResponse.data.toDomain()
+                    val updatedEvent = updatedEventResponse.data.toDomain(sharedPreferencesHelper)
                     
                     // Ensure EventType exists in local database
                     ensureEventTypeExists(updatedEvent.eventTypeId)
@@ -214,12 +214,12 @@ class EventRepositoryImpl @Inject constructor(
                 
                 val uploadedImages = apiResponse.data.uploadedImages.mapNotNull { apiImage ->
                     Log.d("EventRepositoryImpl", "Processing API image: $apiImage")
-                    // Create full URL using base URL + filePath
-                    val fullUrl = sharedPreferencesHelper.createFullImageUrl(apiImage.filePath)
+                    // Use getImageUrl() method instead of direct filePath
+                    val fullUrl = apiImage.getImageUrl(sharedPreferencesHelper)
                     Log.d("EventRepositoryImpl", "Created full URL: $fullUrl for filePath: ${apiImage.filePath}")
                     
-                    if (fullUrl != null) {
-                        apiImage.toDomain().copy(url = fullUrl)
+                    if (fullUrl.isNotEmpty()) {
+                        apiImage.toDomain(sharedPreferencesHelper)
                     } else {
                         Log.w("EventRepositoryImpl", "Skipping image with invalid filePath: ${apiImage.originalName}")
                         null
@@ -282,7 +282,7 @@ class EventRepositoryImpl @Inject constructor(
 }
 
 // Extension functions for mapping between API and Domain models
-private fun EventResponse.toDomain(): Event {
+private fun EventResponse.toDomain(sharedPreferencesHelper: SharedPreferencesHelper): Event {
     Log.d("EventRepositoryImpl", "Mapping EventResponse to Domain: ${this.title} (ID: ${this.id})")
     return Event(
         id = this.id,
@@ -293,11 +293,21 @@ private fun EventResponse.toDomain(): Event {
         location = this.location ?: "",
         createdAt = this.createdAt ?: "",
         updatedAt = this.updatedAt,
-        images = this.images?.map { it.toDomain() } ?: emptyList()
+        images = this.images?.map { it.toDomain(sharedPreferencesHelper) } ?: emptyList()
     )
 }
 
-private fun ApiEventImage.toDomain(): EventImage {
+// Extension function to get image URL
+private fun ApiEventImage.getImageUrl(sharedPreferencesHelper: SharedPreferencesHelper): String {
+    val fullUrl = sharedPreferencesHelper.createFullImageUrl(this.filePath) ?: "https://via.placeholder.com/120x120"
+    Log.d("EventRepositoryImpl", "getImageUrl: filePath=${this.filePath}, fullUrl=$fullUrl")
+    return fullUrl
+}
+
+private fun ApiEventImage.toDomain(sharedPreferencesHelper: SharedPreferencesHelper): EventImage {
+    val imageUrl = this.getImageUrl(sharedPreferencesHelper)
+    Log.d("EventRepositoryImpl", "Mapping ApiEventImage to Domain: id=${this.id}, filePath=${this.filePath}, imageUrl=$imageUrl")
+    
     return EventImage(
         id = this.id,
         eventId = this.eventId,
@@ -306,7 +316,7 @@ private fun ApiEventImage.toDomain(): EventImage {
         filePath = this.filePath ?: "",
         fileSize = this.fileSize ?: 0,
         uploadedAt = this.uploadedAt ?: "",
-        url = "" // Will be set by repository when creating full URL
+        url = imageUrl // Use getImageUrl() method
     )
 }
 
