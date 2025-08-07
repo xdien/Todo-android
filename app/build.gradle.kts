@@ -32,6 +32,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+        isCoreLibraryDesugaringEnabled = true
     }
     kotlin {
         jvmToolchain(11)
@@ -92,6 +93,9 @@ dependencies {
     
     // Material Design for CardView
     implementation("com.google.android.material:material:1.11.0")
+    
+    // Core library desugaring for java.time APIs
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
     
     // Fragment KTX for viewModels() (no longer needed with Compose)
     // implementation("androidx.fragment:fragment-ktx:1.6.2")

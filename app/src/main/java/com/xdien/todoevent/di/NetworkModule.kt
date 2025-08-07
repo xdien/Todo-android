@@ -3,6 +3,7 @@ package com.xdien.todoevent.di
 import com.xdien.todoevent.common.NetworkManager
 import com.xdien.todoevent.common.SharedPreferencesHelper
 import com.xdien.todoevent.data.api.TodoApiService
+import com.xdien.todoevent.data.api.EventApiService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -33,5 +34,11 @@ object NetworkModule {
     @Singleton
     fun provideTodoApiService(networkManager: NetworkManager): TodoApiService {
         return networkManager.getTodoApiService()
+    }
+    
+    @Provides
+    @Singleton
+    fun provideEventApiService(networkManager: NetworkManager): EventApiService {
+        return networkManager.getEventApiService()
     }
 } 

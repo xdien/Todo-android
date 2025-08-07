@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.xdien.todoevent.common.NetworkManager
 import com.xdien.todoevent.common.SharedPreferencesHelper
+import com.xdien.todoevent.data.repository.SyncResult
 import com.xdien.todoevent.ui.components.ApiSettingsDialog
 import com.xdien.todoevent.ui.components.ChipItem
 import com.xdien.todoevent.ui.screens.PersonalEventListCompose
@@ -48,6 +49,7 @@ class PersonalEventComposeActivity : ComponentActivity() {
             TodoEventTheme {
                 val viewModel: TodoViewModel = hiltViewModel()
                 val events by viewModel.todos.collectAsState()
+                val syncResult by viewModel.syncResult.collectAsState()
                 
                 // Search state
                 var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -59,6 +61,31 @@ class PersonalEventComposeActivity : ComponentActivity() {
                 // API Settings state
                 var showApiSettingsDialog by rememberSaveable { mutableStateOf(false) }
                 var currentApiUrl by rememberSaveable { mutableStateOf(sharedPreferencesHelper.getApiUrl()) }
+                
+                // Snackbar state
+                val snackbarHostState = remember { SnackbarHostState() }
+                
+                // Show sync result message
+                LaunchedEffect(syncResult) {
+                    syncResult?.let { result ->
+                        when (result) {
+                            is SyncResult.Success -> {
+                                snackbarHostState.showSnackbar(
+                                    message = "Đồng bộ thành công: ${result.itemCount} sự kiện",
+                                    duration = SnackbarDuration.Short
+                                )
+                            }
+                            is SyncResult.Error -> {
+                                snackbarHostState.showSnackbar(
+                                    message = "Lỗi đồng bộ: ${result.message}",
+                                    duration = SnackbarDuration.Long
+                                )
+                            }
+                        }
+                        // Clear sync result after showing
+                        viewModel.clearSyncResult()
+                    }
+                }
                 
                 // Create chip items for event types
                 val eventTypeChips = remember(events) {
@@ -94,142 +121,147 @@ class PersonalEventComposeActivity : ComponentActivity() {
                     }
                 }
                 
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .statusBarsPadding()
-                ) {
-
-                    
-                    // SearchBar with proper Material 3 implementation
-                    if (isSearchExpanded) {
-                        SearchBar(
-                            modifier = Modifier
-                                .align(Alignment.TopCenter),
-                            inputField = {
-                                SearchBarDefaults.InputField(
-                                    query = searchQuery,
-                                    onQueryChange = { searchQuery = it },
-                                    onSearch = { searchQuery = it },
-                                    expanded = isSearchExpanded,
-                                    onExpandedChange = { isSearchExpanded = it },
-                                    placeholder = { Text("Tìm kiếm sự kiện...") },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Default.Search,
-                                            contentDescription = "Search"
-                                        )
-                                    },
-                                    trailingIcon = {
-                                        if (searchQuery.isNotEmpty()) {
-                                            IconButton(
-                                                onClick = { searchQuery = "" }
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Clear,
-                                                    contentDescription = "Clear search"
-                                                )
-                                            }
-                                        }
-                                    }
-                                )
-                            },
-                            expanded = isSearchExpanded,
-                            onExpandedChange = { isSearchExpanded = it }
-                        ) {
-                            // Search suggestions could be added here
-                        }
-                    }
-                    
-                    // Top right buttons (Search and Settings)
-                    if (!isSearchExpanded) {
-                        Row(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(end = 16.dp, top = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            // Settings button
-                            IconButton(
-                                onClick = { showApiSettingsDialog = true }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Settings,
-                                    contentDescription = "API Settings"
-                                )
-                            }
-                            
-                            // Search button
-                            IconButton(
-                                onClick = { isSearchExpanded = true }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Search,
-                                    contentDescription = "Search"
-                                )
-                            }
-                        }
-                    }
-                    
-                    // Filter chips
-                    if (eventTypeChips.isNotEmpty()) {
-                        LazyRow(
-                            modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .padding(top = if (isSearchExpanded) 80.dp else 60.dp)
-                                .padding(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(eventTypeChips) { chip ->
-                                FilterChip(
-                                    onClick = {
-                                        selectedEventTypes = if (selectedEventTypes.contains(chip.id)) {
-                                            selectedEventTypes - chip.id
-                                        } else {
-                                            selectedEventTypes + chip.id
-                                        }
-                                    },
-                                    label = { Text(chip.title) },
-                                    selected = selectedEventTypes.contains(chip.id),
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = chip.color ?: MaterialTheme.colorScheme.primary,
-                                        selectedLabelColor = Color.White
-                                    )
-                                )
-                            }
-                        }
-                    }
-                    
-                    // Event List
-                    PersonalEventListCompose(
+                Scaffold(
+                    snackbarHost = { SnackbarHost(snackbarHostState) }
+                ) { paddingValues ->
+                    Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(top = if (eventTypeChips.isNotEmpty()) 120.dp else 80.dp),
-                        viewModel = viewModel,
-                        filteredEvents = filteredEvents,
-                        onEventClick = { event ->
-                            // Navigate to event detail screen
-                            startActivity(EventDetailActivity.createIntent(this@PersonalEventComposeActivity, event.id))
-                        },
-                        onAddEventClick = {
-                            // Navigate to add event screen
-                            val intent = Intent(this@PersonalEventComposeActivity, AddEventActivity::class.java)
-                            startActivity(intent)
+                            .statusBarsPadding()
+                            .padding(paddingValues)
+                    ) {
+
+                        
+                        // SearchBar with proper Material 3 implementation
+                        if (isSearchExpanded) {
+                            SearchBar(
+                                modifier = Modifier
+                                    .align(Alignment.TopCenter),
+                                inputField = {
+                                    SearchBarDefaults.InputField(
+                                        query = searchQuery,
+                                        onQueryChange = { searchQuery = it },
+                                        onSearch = { searchQuery = it },
+                                        expanded = isSearchExpanded,
+                                        onExpandedChange = { isSearchExpanded = it },
+                                        placeholder = { Text("Tìm kiếm sự kiện...") },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.Search,
+                                                contentDescription = "Search"
+                                            )
+                                        },
+                                        trailingIcon = {
+                                            if (searchQuery.isNotEmpty()) {
+                                                IconButton(
+                                                    onClick = { searchQuery = "" }
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Clear,
+                                                        contentDescription = "Clear search"
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    )
+                                },
+                                expanded = isSearchExpanded,
+                                onExpandedChange = { isSearchExpanded = it }
+                            ) {
+                                // Search suggestions could be added here
+                            }
                         }
-                    )
-                    
-                    // API Settings Dialog
-                    if (showApiSettingsDialog) {
-                        ApiSettingsDialog(
-                            currentApiUrl = currentApiUrl,
-                            onDismiss = { showApiSettingsDialog = false },
-                            onSave = { newApiUrl ->
-                                networkManager.updateApiUrl(newApiUrl)
-                                currentApiUrl = newApiUrl
-                                // Refresh data with new API URL
-                                viewModel.refreshTodos()
+                        
+                        // Top right buttons (Search and Settings)
+                        if (!isSearchExpanded) {
+                            Row(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(end = 16.dp, top = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                // Settings button
+                                IconButton(
+                                    onClick = { showApiSettingsDialog = true }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Settings,
+                                        contentDescription = "API Settings"
+                                    )
+                                }
+                                
+                                // Search button
+                                IconButton(
+                                    onClick = { isSearchExpanded = true }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Search,
+                                        contentDescription = "Search"
+                                    )
+                                }
+                            }
+                        }
+                        
+                        // Filter chips
+                        if (eventTypeChips.isNotEmpty()) {
+                            LazyRow(
+                                modifier = Modifier
+                                    .align(Alignment.TopCenter)
+                                    .padding(top = if (isSearchExpanded) 80.dp else 60.dp)
+                                    .padding(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(eventTypeChips) { chip ->
+                                    FilterChip(
+                                        onClick = {
+                                            selectedEventTypes = if (selectedEventTypes.contains(chip.id)) {
+                                                selectedEventTypes - chip.id
+                                            } else {
+                                                selectedEventTypes + chip.id
+                                            }
+                                        },
+                                        label = { Text(chip.title) },
+                                        selected = selectedEventTypes.contains(chip.id),
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = chip.color ?: MaterialTheme.colorScheme.primary,
+                                            selectedLabelColor = Color.White
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                        
+                        // Event List
+                        PersonalEventListCompose(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(top = if (eventTypeChips.isNotEmpty()) 120.dp else 80.dp),
+                            viewModel = viewModel,
+                            filteredEvents = filteredEvents,
+                            onEventClick = { event ->
+                                // Navigate to event detail screen
+                                startActivity(EventDetailActivity.createIntent(this@PersonalEventComposeActivity, event.id))
+                            },
+                            onAddEventClick = {
+                                // Navigate to add event screen
+                                val intent = EventFormActivity.createIntent(this@PersonalEventComposeActivity)
+                                startActivity(intent)
                             }
                         )
+                        
+                        // API Settings Dialog
+                        if (showApiSettingsDialog) {
+                            ApiSettingsDialog(
+                                currentApiUrl = currentApiUrl,
+                                onDismiss = { showApiSettingsDialog = false },
+                                onSave = { newApiUrl ->
+                                    networkManager.updateApiUrl(newApiUrl)
+                                    currentApiUrl = newApiUrl
+                                    // Refresh data with new API URL
+                                    viewModel.refreshTodos()
+                                }
+                            )
+                        }
                     }
                 }
             }

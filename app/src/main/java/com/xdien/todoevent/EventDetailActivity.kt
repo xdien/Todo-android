@@ -11,7 +11,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import com.xdien.todoevent.ui.screens.EventDetailScreen
-import com.xdien.todoevent.ui.screens.EventEditScreen
 import com.xdien.todoevent.ui.theme.TodoEventTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -49,7 +48,7 @@ class EventDetailActivity : ComponentActivity() {
                         onNavigateBack = { finish() },
                         onNavigateToEdit = { editEventId ->
                             // Navigate to edit screen
-                            startActivity(EventEditActivity.createIntent(this, editEventId))
+                            startActivity(EventFormActivity.createIntent(this, editEventId))
                         }
                     )
                 }

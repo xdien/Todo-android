@@ -5,6 +5,7 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.xdien.todoevent.data.entity.TodoEntity
+import com.xdien.todoevent.data.repository.SyncResult
 import com.xdien.todoevent.data.repository.TodoRepository
 import com.xdien.todoevent.ui.components.toChipItems
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -25,6 +26,13 @@ class TodoViewModel @Inject constructor(
     
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+    
+    // Sync state
+    private val _isSyncing = MutableStateFlow(false)
+    val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
+    
+    private val _syncResult = MutableStateFlow<SyncResult?>(null)
+    val syncResult: StateFlow<SyncResult?> = _syncResult.asStateFlow()
     
     // LiveData for Fragment approach
     private val _todosLiveData = MutableLiveData<List<TodoEntity>>()
@@ -66,6 +74,33 @@ class TodoViewModel @Inject constructor(
                 _isLoadingLiveData.value = false
             }
         }
+    }
+    
+    /**
+     * Sync data with server - this is the main method for pull-to-refresh functionality
+     */
+    fun syncWithServer() {
+        viewModelScope.launch {
+            _isSyncing.value = true
+            _syncResult.value = null
+            
+            try {
+                val result = todoRepository.syncWithServer()
+                _syncResult.value = result
+                
+                // Reload todos after sync
+                loadTodos()
+            } finally {
+                _isSyncing.value = false
+            }
+        }
+    }
+    
+    /**
+     * Clear sync result - call this to reset sync status
+     */
+    fun clearSyncResult() {
+        _syncResult.value = null
     }
     
     fun addTodo(title: String, description: String? = null, eventType: String? = null) {
@@ -149,8 +184,12 @@ class TodoViewModel @Inject constructor(
         }
     }
     
+    /**
+     * Refresh todos - this method is called for pull-to-refresh
+     * It syncs with server and updates local data
+     */
     fun refreshTodos() {
-        loadTodos()
+        syncWithServer()
     }
     
     private fun addSampleEvents() {

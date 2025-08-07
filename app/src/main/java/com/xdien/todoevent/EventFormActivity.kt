@@ -10,19 +10,19 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-import com.xdien.todoevent.ui.screens.EventEditScreen
+import com.xdien.todoevent.ui.screens.EventFormScreen
 import com.xdien.todoevent.ui.theme.TodoEventTheme
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
-class EventEditActivity : ComponentActivity() {
+class EventFormActivity : ComponentActivity() {
     
     companion object {
         private const val EXTRA_EVENT_ID = "event_id"
         
-        fun createIntent(context: Context, eventId: Long): Intent {
-            return Intent(context, EventEditActivity::class.java).apply {
-                putExtra(EXTRA_EVENT_ID, eventId)
+        fun createIntent(context: Context, eventId: Long? = null): Intent {
+            return Intent(context, EventFormActivity::class.java).apply {
+                eventId?.let { putExtra(EXTRA_EVENT_ID, it) }
             }
         }
     }
@@ -32,10 +32,7 @@ class EventEditActivity : ComponentActivity() {
         enableEdgeToEdge()
         
         val eventId = intent.getLongExtra(EXTRA_EVENT_ID, -1)
-        if (eventId == -1L) {
-            finish()
-            return
-        }
+        val isEditMode = eventId != -1L
         
         setContent {
             TodoEventTheme {
@@ -43,9 +40,10 @@ class EventEditActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    EventEditScreen(
-                        eventId = eventId,
-                        onNavigateBack = { finish() }
+                    EventFormScreen(
+                        eventId = if (isEditMode) eventId else null,
+                        onNavigateBack = { finish() },
+                        onEventSaved = { finish() }
                     )
                 }
             }

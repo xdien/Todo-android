@@ -44,18 +44,71 @@ class TodoRepository @Inject constructor(
     // API methods
     suspend fun fetchTodosFromApi(): List<TodoEntity> {
         return try {
-            val apiTodos = todoApiService.getTodos()
-            apiTodos.map { apiTodo ->
+            val apiResponse = todoApiService.getTodos()
+            
+            if (!apiResponse.success) {
+                throw Exception(apiResponse.message)
+            }
+            
+            val events = apiResponse.data.events
+            events.map { apiTodo ->
                 TodoEntity(
                     id = apiTodo.id,
                     title = apiTodo.title,
                     description = apiTodo.description,
+                    thumbnailUrl = apiTodo.thumbnailUrl,
+                    galleryImages = apiTodo.galleryImages,
+                    eventTime = apiTodo.eventTime,
+                    eventEndTime = apiTodo.eventEndTime,
+                    location = apiTodo.location,
+                    eventType = apiTodo.eventType,
                     isCompleted = apiTodo.isCompleted,
-                    createdAt = apiTodo.createdAt.toLongOrNull() ?: System.currentTimeMillis()
+                    createdAt = apiTodo.createdAt.toLongOrNull() ?: System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis()
                 )
             }
         } catch (e: Exception) {
             emptyList()
         }
     }
+    
+    /**
+     * Sync data with server - fetch from API and update local database
+     * This method implements the sync strategy:
+     * 1. Fetch latest data from server
+     * 2. Update local database with server data
+     * 3. Return success/failure status
+     */
+    suspend fun syncWithServer(): SyncResult {
+        return try {
+            val serverTodos = fetchTodosFromApi()
+            
+            // Clear existing data and insert new data from server
+            // This is a simple sync strategy - in production you might want more sophisticated conflict resolution
+            todoDao.deleteAllTodos()
+            
+            serverTodos.forEach { todo ->
+                todoDao.insertTodo(todo)
+            }
+            
+            SyncResult.Success(serverTodos.size)
+        } catch (e: Exception) {
+            SyncResult.Error(e.message ?: "Unknown error occurred")
+        }
+    }
+    
+    /**
+     * Clear all todos from local database
+     */
+    suspend fun clearAllTodos() {
+        todoDao.deleteAllTodos()
+    }
+}
+
+/**
+ * Result class for sync operations
+ */
+sealed class SyncResult {
+    data class Success(val itemCount: Int) : SyncResult()
+    data class Error(val message: String) : SyncResult()
 } 

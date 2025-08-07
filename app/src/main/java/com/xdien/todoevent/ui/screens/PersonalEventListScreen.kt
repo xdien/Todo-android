@@ -26,51 +26,77 @@ fun PersonalEventListCompose(
     onAddEventClick: () -> Unit = {}
 ) {
     val isLoading by viewModel.isLoading.collectAsState()
+    val isSyncing by viewModel.isSyncing.collectAsState()
+    val syncResult by viewModel.syncResult.collectAsState()
+    
+    // Show sync result message
+    LaunchedEffect(syncResult) {
+        syncResult?.let { result ->
+            when (result) {
+                is com.xdien.todoevent.data.repository.SyncResult.Success -> {
+                    // Success - data synced successfully
+                    // You can show a snackbar or toast here if needed
+                }
+                is com.xdien.todoevent.data.repository.SyncResult.Error -> {
+                    // Error - show error message
+                    // You can show a snackbar or toast here if needed
+                }
+            }
+            // Clear sync result after showing
+            viewModel.clearSyncResult()
+        }
+    }
     
     Box(
         modifier = modifier.fillMaxSize()
     ) {
-            AndroidView(
-                modifier = Modifier.fillMaxSize(),
-                factory = { context ->
-                    SwipeRefreshLayout(context).apply {
-                        setOnRefreshListener {
-                            // TODO: Implement refresh functionality
-                            viewModel.loadTodos()
-                        }
-                        
-                        val recyclerView = RecyclerView(context).apply {
-                            layoutManager = LinearLayoutManager(context)
-                            adapter = PersonalEventAdapter { event ->
-                                onEventClick(event)
-                            }
-                        }
-                        
-                        addView(recyclerView)
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { context ->
+                SwipeRefreshLayout(context).apply {
+                    setOnRefreshListener {
+                        // Trigger sync with server
+                        viewModel.syncWithServer()
                     }
-                },
-                update = { swipeRefreshLayout ->
-                    swipeRefreshLayout.isRefreshing = isLoading
                     
-                    val recyclerView = swipeRefreshLayout.getChildAt(0) as RecyclerView
-                    val adapter = recyclerView.adapter as PersonalEventAdapter
-                    adapter.submitList(filteredEvents)
+                    val recyclerView = RecyclerView(context).apply {
+                        layoutManager = LinearLayoutManager(context)
+                        adapter = PersonalEventAdapter { event ->
+                            onEventClick(event)
+                        }
+                        // Set an ID to easily find it later
+                        id = android.R.id.list
+                    }
+                    
+                    addView(recyclerView)
                 }
-            )
-            
-            // Floating Action Button
-            FloatingActionButton(
-                onClick = onAddEventClick,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp),
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Add new event"
-                )
+            },
+            update = { swipeRefreshLayout ->
+                // Update refresh state
+                swipeRefreshLayout.isRefreshing = isSyncing
+                
+                // Find RecyclerView safely
+                val recyclerView = swipeRefreshLayout.findViewById<RecyclerView>(android.R.id.list)
+                recyclerView?.let { rv ->
+                    val adapter = rv.adapter as? PersonalEventAdapter
+                    adapter?.submitList(filteredEvents)
+                }
             }
+        )
+        
+        // Floating Action Button
+        FloatingActionButton(
+            onClick = onAddEventClick,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp),
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary
+        ) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = "Add new event"
+            )
         }
-    } 
+    }
+} 
