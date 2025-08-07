@@ -257,7 +257,8 @@ fun EventFormScreen(
                             viewModel.removeImage(file)
                         }
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    maxItems = 5
                 )
             }
 

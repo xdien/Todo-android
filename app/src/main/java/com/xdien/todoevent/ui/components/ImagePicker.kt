@@ -98,7 +98,8 @@ fun ImagePicker(
     selectedImages: List<Uri>,
     onImageSelected: (Uri) -> Unit,
     onImageRemoved: (Uri) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    maxItems: Int = 5
 ) {
     val context = LocalContext.current
     val contentResolver: ContentResolver = context.contentResolver
@@ -108,13 +109,36 @@ fun ImagePicker(
     // Track original camera URIs to prevent conversion
     var originalCameraUris by remember { mutableStateOf<Map<Uri, Uri>>(emptyMap()) }
     
-    // Photo picker launcher for selecting multiple images (up to 5)
+    // Calculate remaining slots
+    val remainingSlots = maxItems - selectedImages.size
+    
+    // Photo picker launcher for selecting single image (when only 1 slot remains)
+    val singlePhotoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        android.util.Log.d("ImagePicker", "Single photo picker result - selected: $uri, remaining slots: $remainingSlots")
+        uri?.let { selectedUri ->
+            // Validate URI using ContentResolver
+            val imageInfo = getImageInfo(contentResolver, selectedUri)
+            if (imageInfo != null) {
+                // Take persistent URI permission for long-running operations
+                takePersistableUriPermission(context, selectedUri)
+                onImageSelected(selectedUri)
+            }
+        }
+    }
+    
+    // Photo picker launcher for selecting multiple images (when 2 or more slots remain)
+    // Use a fixed maxItems to avoid the crash issue
     val multiplePhotoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickMultipleVisualMedia(
-            maxItems = 5
+            maxItems = 5  // Use fixed value, we'll limit the selection in the callback
         )
     ) { uris ->
-        uris.forEach { uri ->
+        android.util.Log.d("ImagePicker", "Multiple photo picker result - selected: ${uris.size}, remaining slots: $remainingSlots")
+        // Only process up to remainingSlots images
+        val limitedUris = uris.take(remainingSlots)
+        limitedUris.forEach { uri ->
             // Validate URI using ContentResolver
             val imageInfo = getImageInfo(contentResolver, uri)
             if (imageInfo != null) {
@@ -130,7 +154,7 @@ fun ImagePicker(
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
-        android.util.Log.d("ImagePicker", "Camera launcher result - success: $success, uri: $cameraImageUri")
+        android.util.Log.d("ImagePicker", "Camera launcher result - success: $success, uri: $cameraImageUri, remaining slots: $remainingSlots")
         if (success && cameraImageUri != null) {
             try {
                 android.util.Log.d("ImagePicker", "Processing camera image: $cameraImageUri")
@@ -204,7 +228,7 @@ fun ImagePicker(
             contentPadding = PaddingValues(vertical = 8.dp)
         ) {
             // Add image button
-            if (selectedImages.size < 5) {
+            if (selectedImages.size < maxItems) {
                 item {
                     Card(
                         modifier = Modifier.size(120.dp),
@@ -239,7 +263,7 @@ fun ImagePicker(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    text = "${selectedImages.size}/5",
+                                    text = "${selectedImages.size}/$maxItems",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -390,7 +414,7 @@ fun ImagePicker(
                 )
             ) {
                 Text(
-                    text = "Chọn tối đa 5 hình ảnh cho sự kiện của bạn",
+                    text = "Chọn tối đa $maxItems hình ảnh cho sự kiện của bạn",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(12.dp)
@@ -405,7 +429,7 @@ fun ImagePicker(
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
-                        text = "Đã chọn ${selectedImages.size}/5 hình ảnh",
+                        text = "Đã chọn ${selectedImages.size}/$maxItems hình ảnh",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
@@ -449,18 +473,22 @@ fun ImagePicker(
                     Button(
                         onClick = {
                             showImageSourceDialog = false
-                            // Create a temporary file for camera capture
-                            val tempFile = File.createTempFile("camera_", ".jpg", context.cacheDir)
-                            cameraImageUri = FileProvider.getUriForFile(
-                                context,
-                                "${context.packageName}.fileprovider",
-                                tempFile
-                            )
-                            android.util.Log.d("ImagePicker", "Camera URI created: $cameraImageUri")
-                            android.util.Log.d("ImagePicker", "Temp file path: ${tempFile.absolutePath}")
-                            android.util.Log.d("ImagePicker", "Temp file exists: ${tempFile.exists()}")
-                            cameraLauncher.launch(cameraImageUri!!)
-                        }
+                            // Check if there are remaining slots
+                            if (remainingSlots > 0) {
+                                // Create a temporary file for camera capture
+                                val tempFile = File.createTempFile("camera_", ".jpg", context.cacheDir)
+                                cameraImageUri = FileProvider.getUriForFile(
+                                    context,
+                                    "${context.packageName}.fileprovider",
+                                    tempFile
+                                )
+                                android.util.Log.d("ImagePicker", "Camera URI created: $cameraImageUri")
+                                android.util.Log.d("ImagePicker", "Temp file path: ${tempFile.absolutePath}")
+                                android.util.Log.d("ImagePicker", "Temp file exists: ${tempFile.exists()}")
+                                cameraLauncher.launch(cameraImageUri!!)
+                            }
+                        },
+                        enabled = remainingSlots > 0
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
@@ -471,16 +499,29 @@ fun ImagePicker(
                         Text("Chụp ảnh")
                     }
                     
-                    // Multiple images picker
+                    // Gallery picker (single or multiple based on remaining slots)
                     Button(
                         onClick = {
                             showImageSourceDialog = false
-                            multiplePhotoPickerLauncher.launch(
-                                PickVisualMediaRequest.Builder()
-                                    .setMediaType(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                    .build()
-                            )
-                        }
+                            if (remainingSlots > 0) {
+                                if (remainingSlots == 1) {
+                                    // Use single picker when only 1 slot remains
+                                    singlePhotoPickerLauncher.launch(
+                                        PickVisualMediaRequest.Builder()
+                                            .setMediaType(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                            .build()
+                                    )
+                                } else {
+                                    // Use multiple picker when 2 or more slots remain
+                                    multiplePhotoPickerLauncher.launch(
+                                        PickVisualMediaRequest.Builder()
+                                            .setMediaType(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                            .build()
+                                    )
+                                }
+                            }
+                        },
+                        enabled = remainingSlots > 0
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
@@ -488,7 +529,7 @@ fun ImagePicker(
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Chọn nhiều ảnh")
+                        Text(if (remainingSlots == 1) "Chọn ảnh" else "Chọn nhiều ảnh")
                     }
                 }
             },
