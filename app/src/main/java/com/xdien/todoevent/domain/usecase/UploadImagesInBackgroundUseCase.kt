@@ -21,6 +21,11 @@ import javax.inject.Singleton
 class UploadImagesInBackgroundUseCase @Inject constructor(
     private val eventRepository: EventRepository
 ) {
+    companion object {
+        const val MAX_IMAGES_PER_EVENT = 5
+        val ALLOWED_EXTENSIONS = setOf("jpg", "jpeg", "png", "gif", "webp")
+        const val MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024 // 10MB
+    }
     private val uploadJobs = mutableMapOf<Int, Job>()
     
     /**

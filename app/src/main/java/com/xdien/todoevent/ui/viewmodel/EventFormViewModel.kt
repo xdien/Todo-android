@@ -6,11 +6,12 @@ import com.xdien.todoevent.domain.model.Event
 import com.xdien.todoevent.domain.model.EventType
 import com.xdien.todoevent.domain.usecase.CreateEventUseCase
 import com.xdien.todoevent.domain.usecase.GetEventTypesUseCase
-import com.xdien.todoevent.domain.usecase.UploadEventImagesUseCase
+
 import com.xdien.todoevent.domain.usecase.UpdateEventUseCase
 import com.xdien.todoevent.domain.usecase.GetEventByIdUseCase
-import com.xdien.todoevent.domain.usecase.UploadImagesInBackgroundUseCase
+
 import com.xdien.todoevent.domain.repository.EventRepository
+import com.xdien.todoevent.domain.usecase.UploadImagesInBackgroundUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,10 +27,9 @@ import javax.inject.Inject
 class EventFormViewModel @Inject constructor(
     private val createEventUseCase: CreateEventUseCase,
     private val getEventTypesUseCase: GetEventTypesUseCase,
-    private val uploadEventImagesUseCase: UploadEventImagesUseCase,
+    private val uploadEventImagesUseCase: UploadImagesInBackgroundUseCase,
     private val updateEventUseCase: UpdateEventUseCase,
     private val getEventByIdUseCase: GetEventByIdUseCase,
-    private val uploadImagesInBackgroundUseCase: UploadImagesInBackgroundUseCase,
     private val eventRepository: EventRepository
 ) : ViewModel() {
 
@@ -152,7 +152,7 @@ class EventFormViewModel @Inject constructor(
         if (isEditMode) return // Don't allow image changes in edit mode
         
         val currentImages = _selectedImages.value.toMutableList()
-        val remainingSlots = UploadEventImagesUseCase.MAX_IMAGES_PER_EVENT - currentImages.size
+        val remainingSlots = UploadImagesInBackgroundUseCase.MAX_IMAGES_PER_EVENT - currentImages.size
         
         if (remainingSlots > 0) {
             // Filter out duplicate files by name
@@ -172,7 +172,7 @@ class EventFormViewModel @Inject constructor(
             _selectedImages.value = currentImages
             
             _uiState.value = _uiState.value.copy(
-                remainingImageSlots = UploadEventImagesUseCase.MAX_IMAGES_PER_EVENT - currentImages.size,
+                remainingImageSlots = UploadImagesInBackgroundUseCase.MAX_IMAGES_PER_EVENT - currentImages.size,
                 duplicateImageMessage = duplicateMessage
             )
         }
@@ -189,7 +189,7 @@ class EventFormViewModel @Inject constructor(
         _selectedImages.value = currentImages
         
         _uiState.value = _uiState.value.copy(
-            remainingImageSlots = UploadEventImagesUseCase.MAX_IMAGES_PER_EVENT - currentImages.size
+            remainingImageSlots = UploadImagesInBackgroundUseCase.MAX_IMAGES_PER_EVENT - currentImages.size
         )
     }
 
@@ -199,7 +199,7 @@ class EventFormViewModel @Inject constructor(
     fun clearImages() {
         _selectedImages.value = emptyList()
         _uiState.value = _uiState.value.copy(
-            remainingImageSlots = UploadEventImagesUseCase.MAX_IMAGES_PER_EVENT,
+            remainingImageSlots = UploadImagesInBackgroundUseCase.MAX_IMAGES_PER_EVENT,
             duplicateImageMessage = null
         )
     }
@@ -248,21 +248,29 @@ class EventFormViewModel @Inject constructor(
                         }
                     }
                 } else {
-                    // Create new event
-                    val result = createEventUseCase.invoke(
-                        title = currentState.title,
-                        description = currentState.description,
-                        typeId = currentState.typeId,
-                        startDate = currentState.startDate,
-                        location = currentState.location
-                    )
+                    // Create new event with images if available
+                    val result = if (_selectedImages.value.isNotEmpty()) {
+                        // Create event with images in one operation
+                        createEventUseCase.invokeWithImages(
+                            title = currentState.title,
+                            description = currentState.description,
+                            typeId = currentState.typeId,
+                            startDate = currentState.startDate,
+                            location = currentState.location,
+                            imageFiles = _selectedImages.value
+                        )
+                    } else {
+                        // Create event without images
+                        createEventUseCase.invoke(
+                            title = currentState.title,
+                            description = currentState.description,
+                            typeId = currentState.typeId,
+                            startDate = currentState.startDate,
+                            location = currentState.location
+                        )
+                    }
 
                     result.onSuccess { event ->
-                        // If there are images, upload them in background
-                        if (_selectedImages.value.isNotEmpty()) {
-                            uploadImagesInBackground(event.id, _selectedImages.value)
-                        }
-                        
                         _uiState.value = currentState.copy(
                             isLoading = false,
                             isSuccess = true,
@@ -338,49 +346,10 @@ class EventFormViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(duplicateImageMessage = null)
     }
     
-    /**
-     * Upload images in background for an event
-     */
-    private fun uploadImagesInBackground(eventId: Int, imageFiles: List<File>) {
-        uploadImagesInBackgroundUseCase.uploadImagesInBackground(
-            eventId = eventId,
-            imageFiles = imageFiles,
-            onProgress = { uploaded, total ->
-                _uploadProgress.value = UploadProgress(uploaded, total)
-            },
-            onSuccess = { uploadedImages ->
-                _uploadProgress.value = null
-                // Could show success message or update UI
-            },
-            onError = { error ->
-                _uploadProgress.value = null
-                // Could show error message
-            }
-        )
-    }
-    
-    /**
-     * Cancel upload for current event
-     */
-    fun cancelUpload() {
-        currentEventData?.let { event ->
-            uploadImagesInBackgroundUseCase.cancelUpload(event.id)
-        }
-    }
-    
-    /**
-     * Check if there's an active upload
-     */
-    fun isUploading(): Boolean {
-        return currentEventData?.let { event ->
-            uploadImagesInBackgroundUseCase.isUploading(event.id)
-        } ?: false
-    }
+
     
     override fun onCleared() {
         super.onCleared()
-        // Cancel any ongoing uploads when ViewModel is cleared
-        uploadImagesInBackgroundUseCase.cancelAllUploads()
     }
 }
 
@@ -398,7 +367,7 @@ data class EventFormUiState(
     val isEditMode: Boolean = false,
     val error: String? = null,
     val createdEvent: Event? = null,
-    val remainingImageSlots: Int = UploadEventImagesUseCase.MAX_IMAGES_PER_EVENT,
+    val remainingImageSlots: Int = UploadImagesInBackgroundUseCase.MAX_IMAGES_PER_EVENT,
     val duplicateImageMessage: String? = null
 )
 

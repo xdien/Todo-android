@@ -73,16 +73,9 @@ fun EventFormScreen(
         }
     }
     
-    // Handle back navigation with upload in progress
-    val context = LocalContext.current
+    // Handle back navigation
     val onBackPressed = {
-        if (viewModel.isUploading()) {
-            // Show confirmation dialog if upload is in progress
-            // For now, just allow back navigation
-            onNavigateBack()
-        } else {
-            onNavigateBack()
-        }
+        onNavigateBack()
     }
 
     val snackbarHostState = remember { SnackbarHostState() }

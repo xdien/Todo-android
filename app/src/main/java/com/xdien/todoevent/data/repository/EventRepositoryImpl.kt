@@ -45,10 +45,10 @@ class EventRepositoryImpl @Inject constructor(
                 
                 // Save to local database
                 val entity = createdEvent.toEntity()
-                val localId = todoDao.insertTodo(entity)
+                todoDao.insertTodo(entity)
                 
-                // Return the created event with local ID
-                createdEvent.copy(id = localId.toInt())
+                // Return the created event with SERVER ID (not local ID)
+                createdEvent
             } else {
                 throw Exception(apiResponse.message)
             }
