@@ -107,14 +107,14 @@ object EventMapper {
     fun EventResponse.toDomain(): Event {
         return Event(
             id = this.id,
-            title = this.title,
-            description = this.description,
-            typeId = this.typeId,
-            startDate = this.startDate,
-            location = this.location,
-            createdAt = this.createdAt,
+            title = this.title ?: "",
+            description = this.description ?: "",
+            typeId = this.typeId ?: 1,
+            startDate = this.startDate ?: "",
+            location = this.location ?: "",
+            createdAt = this.createdAt ?: "",
             updatedAt = this.updatedAt,
-            images = this.images.map { it.toDomain() }
+            images = this.images?.map { it.toDomain() } ?: emptyList()
         )
     }
     

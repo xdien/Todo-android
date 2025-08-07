@@ -33,30 +33,40 @@ class EventRepositoryImpl @Inject constructor(
     private val todoDao: TodoDao,
     private val eventApiService: EventApiService
 ) : EventRepository {
+    val TAG = "EventRepositoryImpl"
     
     override suspend fun createEvent(event: Event): Event {
         return try {
             // First, try to create event via API
             val apiRequest = event.toCreateRequest()
+            android.util.Log.d(TAG, "🔍 Creating event via API: ${apiRequest}")
+            
             val apiResponse = eventApiService.createEvent(apiRequest)
+            android.util.Log.d(TAG, "📡 API Response: success=${apiResponse.success}, message=${apiResponse.message}")
             
             if (apiResponse.success) {
+                android.util.Log.d(TAG, "✅ API call successful, data: ${apiResponse.data}")
+                
                 val createdEvent = apiResponse.data.toDomain()
+                android.util.Log.d(TAG, "🔄 Converted to domain: id=${createdEvent.id}, title=${createdEvent.title}")
                 
                 // Save to local database
                 val entity = createdEvent.toEntity()
                 todoDao.insertTodo(entity)
+                android.util.Log.d(TAG, "💾 Saved to local database with server ID: ${createdEvent.id}")
                 
                 // Return the created event with SERVER ID (not local ID)
                 createdEvent
             } else {
+                android.util.Log.e(TAG, "❌ API call failed: ${apiResponse.message}")
                 throw Exception(apiResponse.message)
             }
         } catch (e: Exception) {
-            // If API fails, save locally only
-            val entity = event.toEntity()
-            val localId = todoDao.insertTodo(entity)
-            event.copy(id = localId.toInt())
+            android.util.Log.e(TAG, "💥 Exception in createEvent: ${e.message}", e)
+            android.util.Log.e(TAG, "❌ API creation failed, throwing exception instead of local fallback")
+            
+            // If API fails, throw exception instead of saving locally
+            throw e
         }
     }
     

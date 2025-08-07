@@ -1,5 +1,6 @@
 package com.xdien.todoevent.ui.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.xdien.todoevent.domain.model.Event
@@ -32,6 +33,7 @@ class EventFormViewModel @Inject constructor(
     private val getEventByIdUseCase: GetEventByIdUseCase,
     private val eventRepository: EventRepository
 ) : ViewModel() {
+    val TAG = "EventFormViewModel"
 
     // UI State
     private val _uiState = MutableStateFlow(EventFormUiState())
@@ -248,39 +250,38 @@ class EventFormViewModel @Inject constructor(
                         }
                     }
                 } else {
-                    // Create new event with images if available
-                    val result = if (_selectedImages.value.isNotEmpty()) {
-                        // Create event with images in one operation
-                        createEventUseCase.invokeWithImages(
-                            title = currentState.title,
-                            description = currentState.description,
-                            typeId = currentState.typeId,
-                            startDate = currentState.startDate,
-                            location = currentState.location,
-                            imageFiles = _selectedImages.value
-                        )
-                    } else {
-                        // Create event without images
-                        createEventUseCase.invoke(
-                            title = currentState.title,
-                            description = currentState.description,
-                            typeId = currentState.typeId,
-                            startDate = currentState.startDate,
-                            location = currentState.location
-                        )
-                    }
+                    // Create new event first (without images)
+                    val createEventResult = createEventUseCase.invoke(
+                        title = currentState.title,
+                        description = currentState.description,
+                        typeId = currentState.typeId,
+                        startDate = currentState.startDate,
+                        location = currentState.location
+                    )
 
-                    result.onSuccess { event ->
+                    createEventResult.onSuccess { event ->
+                        // Event created successfully, save it to state first
                         _uiState.value = currentState.copy(
-                            isLoading = false,
-                            isSuccess = true,
-                            createdEvent = event,
-                            error = null
+                            createdEvent = event
                         )
+                        
+                        // Now upload images if any
+                        if (_selectedImages.value.isNotEmpty()) {
+
+                            Log.d(TAG, "createEventResult: ${event.id}")
+                            uploadImagesToEvent(event.id)
+                        } else {
+                            // No images to upload, complete the process
+                            _uiState.value = _uiState.value.copy(
+                                isLoading = false,
+                                isSuccess = true,
+                                error = null
+                            )
+                        }
                     }.onFailure { error ->
                         _uiState.value = currentState.copy(
                             isLoading = false,
-                            error = error.message ?: "Không thể lưu sự kiện"
+                            error = error.message ?: "Không thể tạo sự kiện"
                         )
                     }
                 }
@@ -344,6 +345,54 @@ class EventFormViewModel @Inject constructor(
      */
     fun clearDuplicateMessage() {
         _uiState.value = _uiState.value.copy(duplicateImageMessage = null)
+    }
+
+    /**
+     * Upload images to existing event
+     */
+    private fun uploadImagesToEvent(eventId: Int) {
+        if (_selectedImages.value.isEmpty()) return
+
+        _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+
+        uploadEventImagesUseCase.uploadImagesInBackground(
+            eventId = eventId,
+            imageFiles = _selectedImages.value,
+            onProgress = { uploaded, total ->
+                _uploadProgress.value = UploadProgress(uploaded, total)
+            },
+            onSuccess = { images ->
+                // Get the created event from current state
+                val currentState = _uiState.value
+                val createdEvent = currentState.createdEvent
+                
+                if (createdEvent != null) {
+                    // Update the event with uploaded images
+                    val eventWithImages = createdEvent.copy(images = images)
+                    _uiState.value = currentState.copy(
+                        isLoading = false,
+                        isSuccess = true,
+                        createdEvent = eventWithImages,
+                        error = null
+                    )
+                } else {
+                    // Fallback if createdEvent is null
+                    _uiState.value = currentState.copy(
+                        isLoading = false,
+                        error = null
+                    )
+                }
+                clearImages()
+                _uploadProgress.value = null
+            },
+            onError = { error ->
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = error.message ?: "Không thể tải lên hình ảnh"
+                )
+                _uploadProgress.value = null
+            }
+        )
     }
     
 
