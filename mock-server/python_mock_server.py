@@ -229,6 +229,8 @@ def get_event_by_id(event_id: int) -> Optional[Dict[str, Any]]:
         
         # Convert to dict and add images
         event_dict = dict(event)
+        # Map type_id to eventTypeId for client consistency
+        event_dict['eventTypeId'] = event_dict.pop('type_id', None)
         event_dict['images'] = images
         
         logger.debug(f"✅ Found event: {event_dict['title']} with {len(images)} images")
@@ -256,6 +258,8 @@ def get_all_events(keyword: str = None, type_id: int = None) -> List[Dict[str, A
         
         for event_row in cursor.fetchall():
             event = dict(event_row)
+            # Map type_id to eventTypeId for client consistency
+            event['eventTypeId'] = event.pop('type_id', None)
             # Get images for this event
             images_cursor = conn.execute(
                 "SELECT * FROM images WHERE event_id = ? ORDER BY uploaded_at DESC",
@@ -284,7 +288,7 @@ def create_event(event_data: Dict[str, Any]) -> Dict[str, Any]:
         ''', (
             event_data['title'],
             event_data['description'],
-            event_data['typeId'],
+            event_data['eventTypeId'],
             event_data['startDate'],
             event_data['location'],
             datetime.now().isoformat()
@@ -293,7 +297,7 @@ def create_event(event_data: Dict[str, Any]) -> Dict[str, Any]:
         event_id = cursor.lastrowid
         logger.info(f"✅ Event created with ID: {event_id}")
         
-        # Verify the event was actually created
+        # Verify the event was actually created within the same transaction
         verify_cursor = conn.execute("SELECT id, title FROM events WHERE id = ?", (event_id,))
         verify_result = verify_cursor.fetchone()
         
@@ -303,36 +307,48 @@ def create_event(event_data: Dict[str, Any]) -> Dict[str, Any]:
         
         logger.info(f"✅ Event verification successful: ID {event_id}, Title: {verify_result[1]}")
         
-        # Get the complete event data - try multiple times if needed
-        event_data = None
-        for attempt in range(3):
-            try:
-                event_data = get_event_by_id(event_id)
-                if event_data:
-                    break
-                logger.warning(f"⚠️ Attempt {attempt + 1}: Could not retrieve event data for ID {event_id}")
-                import time
-                time.sleep(0.1)  # Small delay before retry
-            except Exception as e:
-                logger.warning(f"⚠️ Attempt {attempt + 1} failed: {str(e)}")
-                import time
-                time.sleep(0.1)
-        
-        if not event_data:
-            logger.error(f"❌ CRITICAL: Could not retrieve event data for ID {event_id} after 3 attempts")
+        # Get the complete event data within the same transaction
+        try:
+            # Get event data directly in this transaction
+            event_cursor = conn.execute(
+                "SELECT * FROM events WHERE id = ?",
+                (event_id,)
+            )
+            event = event_cursor.fetchone()
+            
+            if not event:
+                logger.error(f"❌ CRITICAL: Event with ID {event_id} not found in same transaction!")
+                raise Exception(f"Event not found in same transaction - ID {event_id}")
+            
+            # Get images for this event
+            images_cursor = conn.execute(
+                "SELECT * FROM images WHERE event_id = ? ORDER BY uploaded_at DESC",
+                (event_id,)
+            )
+            images = [dict(img) for img in images_cursor.fetchall()]
+            
+            # Convert to dict and add images
+            event_dict = dict(event)
+            # Map type_id to eventTypeId for client consistency
+            event_dict['eventTypeId'] = event_dict.pop('type_id', None)
+            event_dict['images'] = images
+            
+            logger.info(f"✅ Event data retrieved successfully: ID {event_id}, Title: {event_dict['title']}")
+            return event_dict
+            
+        except Exception as e:
+            logger.error(f"❌ CRITICAL: Could not retrieve event data for ID {event_id}: {str(e)}")
             # Return basic event data instead of raising exception
             return {
                 "id": event_id,
                 "title": "Event Created Successfully",
                 "description": "Event was created but data retrieval failed",
-                "type_id": 1,
+                "eventTypeId": 1,
                 "start_date": datetime.now().isoformat(),
                 "location": "Unknown",
                 "created_at": datetime.now().isoformat(),
                 "images": []
             }
-        
-        return event_data
 
 def update_event(event_id: int, event_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Update an existing event"""
@@ -351,7 +367,7 @@ def update_event(event_id: int, event_data: Dict[str, Any]) -> Optional[Dict[str
         field_mapping = {
             'title': 'title',
             'description': 'description',
-            'typeId': 'type_id',
+            'eventTypeId': 'type_id',
             'startDate': 'start_date',
             'location': 'location'
         }
@@ -504,7 +520,7 @@ def get_events():
     try:
         # Get query parameters
         keyword = request.args.get('q', '').lower()
-        type_id = request.args.get('typeId', type=int)
+        type_id = request.args.get('eventTypeId', type=int)
         
         logger.info(f"🔍 Getting events with filters - keyword: '{keyword}', type_id: {type_id}")
         
@@ -517,7 +533,7 @@ def get_events():
                 "total": len(filtered_events),
                 "filters": {
                     "keyword": keyword if keyword else None,
-                    "typeId": type_id
+                    "eventTypeId": type_id
                 }
             },
             message=f"Lấy danh sách sự kiện thành công. Tìm thấy {len(filtered_events)} sự kiện."
@@ -564,10 +580,9 @@ def create_event_endpoint():
     """POST /events - Tạo sự kiện mới"""
     try:
         data = request.get_json()
-        logger.info(f"📝 Creating new event: {data.get('title', 'Unknown')}")
         
         # Validate required fields
-        required_fields = ['title', 'description', 'typeId', 'startDate', 'location']
+        required_fields = ['title', 'description', 'eventTypeId', 'startDate', 'location']
         for field in required_fields:
             if field not in data or not data[field]:
                 logger.warning(f"⚠️ Missing required field: {field}")
@@ -577,13 +592,13 @@ def create_event_endpoint():
                     status_code=400
                 )
         
-        # Validate typeId exists
+        # Validate eventTypeId exists
         event_types = get_all_event_types()
-        if not any(et['id'] == data['typeId'] for et in event_types):
-            logger.warning(f"⚠️ Invalid typeId: {data['typeId']}")
+        if not any(et['id'] == data['eventTypeId'] for et in event_types):
+            logger.warning(f"⚠️ Invalid eventTypeId: {data['eventTypeId']}")
             return create_response(
                 success=False,
-                message="TypeId không hợp lệ",
+                message="eventTypeId không hợp lệ",
                 status_code=400
             )
         
@@ -627,14 +642,18 @@ def update_event_endpoint(event_id):
         field_mapping = {
             'title': 'title',
             'description': 'description',
-            'typeId': 'type_id',
+            'eventTypeId': 'type_id',
             'startDate': 'start_date',
             'location': 'location'
         }
         
         for field in data:
             if field in field_mapping and data[field]:
-                updated_fields.append(field)
+                # Map back to client field names for response
+                if field == 'eventTypeId':
+                    updated_fields.append('eventTypeId')
+                else:
+                    updated_fields.append(field)
         
         return create_response(
             data={
@@ -852,6 +871,7 @@ if __name__ == '__main__':
     print("   POST   /events/<id>/images - Upload hình ảnh")
     print("   GET    /event-types     - Loại sự kiện")
     print("   GET    /debug/events    - Debug database state")
+    print("   📝 Note: API now uses 'eventTypeId' instead of 'typeId' for consistency")
     print("✨ CORS enabled - Có thể gọi từ mọi domain")
     print("🗄️  SQLite database với quan hệ một-nhiều events-images")
     print("📊 Comprehensive request logging enabled")
