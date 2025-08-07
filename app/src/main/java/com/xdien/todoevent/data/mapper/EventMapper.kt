@@ -79,7 +79,7 @@ object EventMapper {
                     eventId = this.id.toInt(),
                     originalName = "image_$index.jpg",
                     filename = "image_$index.jpg",
-                    filePath = "",
+                    filePath = null,
                     fileSize = 0,
                     uploadedAt = this.createdAt.toString(),
                     url = url
@@ -130,7 +130,7 @@ object EventMapper {
             filePath = this.filePath,
             fileSize = this.fileSize,
             uploadedAt = this.uploadedAt,
-            url = this.url
+            url = this.url ?: ""
         )
     }
     

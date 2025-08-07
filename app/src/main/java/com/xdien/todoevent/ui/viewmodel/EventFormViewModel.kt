@@ -352,22 +352,32 @@ class EventFormViewModel @Inject constructor(
      * Upload images to existing event
      */
     private fun uploadImagesToEvent(eventId: Int) {
-        if (_selectedImages.value.isEmpty()) return
+        Log.d("EventFormViewModel", "Starting uploadImagesToEvent for event $eventId with ${_selectedImages.value.size} images")
+        
+        if (_selectedImages.value.isEmpty()) {
+            Log.d("EventFormViewModel", "No images to upload, returning early")
+            return
+        }
 
         _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+        Log.d("EventFormViewModel", "Set loading state to true")
 
         uploadEventImagesUseCase.uploadImagesInBackground(
             eventId = eventId,
             imageFiles = _selectedImages.value,
             onProgress = { uploaded, total ->
+                Log.d("EventFormViewModel", "Upload progress: $uploaded/$total")
                 _uploadProgress.value = UploadProgress(uploaded, total)
             },
             onSuccess = { images ->
+                Log.d("EventFormViewModel", "Upload success with ${images.size} images")
+                
                 // Get the created event from current state
                 val currentState = _uiState.value
                 val createdEvent = currentState.createdEvent
                 
                 if (createdEvent != null) {
+                    Log.d("EventFormViewModel", "Updating event with uploaded images")
                     // Update the event with uploaded images (images already have full URLs)
                     val eventWithImages = createdEvent.copy(images = images)
                     _uiState.value = currentState.copy(
@@ -379,7 +389,9 @@ class EventFormViewModel @Inject constructor(
                     
                     // Update current event for UI display
                     _currentEvent.value = eventWithImages
+                    Log.d("EventFormViewModel", "Event updated successfully with images")
                 } else {
+                    Log.w("EventFormViewModel", "createdEvent is null, using fallback")
                     // Fallback if createdEvent is null
                     _uiState.value = currentState.copy(
                         isLoading = false,
@@ -388,13 +400,16 @@ class EventFormViewModel @Inject constructor(
                 }
                 clearImages()
                 _uploadProgress.value = null
+                Log.d("EventFormViewModel", "Upload process completed successfully")
             },
             onError = { error ->
+                Log.e("EventFormViewModel", "Upload error occurred", error)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     error = error.message ?: "Không thể tải lên hình ảnh"
                 )
                 _uploadProgress.value = null
+                Log.d("EventFormViewModel", "Upload error handled, loading state set to false")
             }
         )
     }

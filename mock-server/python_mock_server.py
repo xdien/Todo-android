@@ -462,8 +462,19 @@ def add_event_images(event_id: int, image_files) -> List[Dict[str, Any]]:
                 # Get the inserted image
                 img_cursor = conn.execute("SELECT * FROM images WHERE id = ?", (image_id,))
                 image_data = dict(img_cursor.fetchone())
-                image_data['url'] = f"/uploads/{unique_filename}"
-                uploaded_images.append(image_data)
+                
+                # Map snake_case to camelCase for client consistency
+                mapped_image = {
+                    'id': image_data['id'],
+                    'eventId': image_data['event_id'],
+                    'originalName': image_data['original_name'],
+                    'filename': image_data['filename'],
+                    'filePath': image_data['file_path'],
+                    'fileSize': image_data['file_size'],
+                    'uploadedAt': image_data['uploaded_at'],
+                    'url': f"/uploads/{unique_filename}"
+                }
+                uploaded_images.append(mapped_image)
                 
                 logger.info(f"✅ Image uploaded: {file.filename} -> {unique_filename}")
         

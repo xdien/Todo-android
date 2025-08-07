@@ -31,10 +31,10 @@ data class EventImage(
     val eventId: Int,
     val originalName: String,
     val filename: String,
-    val filePath: String,
+    val filePath: String?, // Allow null for filePath
     val fileSize: Int,
     val uploadedAt: String,
-    val url: String
+    val url: String?
 )
 
 // Event type model (matching mock server)

@@ -1,5 +1,6 @@
 package com.xdien.todoevent.domain.usecase
 
+import android.util.Log
 import com.xdien.todoevent.domain.model.EventImage
 import com.xdien.todoevent.domain.repository.EventRepository
 import kotlinx.coroutines.CoroutineScope
@@ -44,6 +45,8 @@ class UploadImagesInBackgroundUseCase @Inject constructor(
         onSuccess: (List<EventImage>) -> Unit = {},
         onError: (Exception) -> Unit = {}
     ) {
+        Log.d("UploadImagesInBackgroundUseCase", "Starting upload for event $eventId with ${imageFiles.size} images")
+        
         // Cancel any existing upload job for this event
         uploadJobs[eventId]?.cancel()
         
@@ -51,35 +54,53 @@ class UploadImagesInBackgroundUseCase @Inject constructor(
             try {
                 var uploadedCount = 0
                 val totalImages = imageFiles.size
+                val failedImages = mutableListOf<String>()
+                
+                Log.d("UploadImagesInBackgroundUseCase", "Starting upload loop for $totalImages images")
                 
                 // Upload images one by one to track progress
                 val uploadedImages = mutableListOf<EventImage>()
                 
-                for (imageFile in imageFiles) {
+                for ((index, imageFile) in imageFiles.withIndex()) {
                     try {
+                        Log.d("UploadImagesInBackgroundUseCase", "Uploading image ${index + 1}/$totalImages: ${imageFile.name}")
+                        
                         val result = eventRepository.uploadEventImages(eventId, listOf(imageFile))
                         uploadedImages.addAll(result)
                         uploadedCount++
+                        
+                        Log.d("UploadImagesInBackgroundUseCase", "Successfully uploaded image: ${imageFile.name}, result count: ${result.size}")
                         
                         withContext(Dispatchers.Main) {
                             onProgress(uploadedCount, totalImages)
                         }
                     } catch (e: Exception) {
+                        Log.e("UploadImagesInBackgroundUseCase", "Failed to upload image: ${imageFile.name}", e)
+                        failedImages.add("${imageFile.name}: ${e.message}")
+                        
                         // Continue with other images even if one fails
-                        withContext(Dispatchers.Main) {
-                            onError(e)
-                        }
+                        // Don't call onError here as we want to continue with other images
                     }
                 }
                 
+                Log.d("UploadImagesInBackgroundUseCase", "Upload loop completed. Success: $uploadedCount/$totalImages, Failed: ${failedImages.size}")
+                
                 withContext(Dispatchers.Main) {
-                    onSuccess(uploadedImages)
+                    if (uploadedImages.isNotEmpty()) {
+                        Log.d("UploadImagesInBackgroundUseCase", "Calling onSuccess with ${uploadedImages.size} uploaded images")
+                        onSuccess(uploadedImages)
+                    } else {
+                        Log.e("UploadImagesInBackgroundUseCase", "No images were uploaded successfully. Failed images: $failedImages")
+                        onError(Exception("Failed to upload any images. Errors: ${failedImages.joinToString(", ")}"))
+                    }
                 }
             } catch (e: Exception) {
+                Log.e("UploadImagesInBackgroundUseCase", "Critical error during upload process for event $eventId", e)
                 withContext(Dispatchers.Main) {
                     onError(e)
                 }
             } finally {
+                Log.d("UploadImagesInBackgroundUseCase", "Cleaning up upload job for event $eventId")
                 uploadJobs.remove(eventId)
             }
         }
@@ -93,16 +114,20 @@ class UploadImagesInBackgroundUseCase @Inject constructor(
      * @param eventId The event ID
      */
     fun cancelUpload(eventId: Int) {
+        Log.d("UploadImagesInBackgroundUseCase", "Cancelling upload for event $eventId")
         uploadJobs[eventId]?.cancel()
         uploadJobs.remove(eventId)
+        Log.d("UploadImagesInBackgroundUseCase", "Upload cancelled for event $eventId")
     }
     
     /**
      * Cancel all uploads
      */
     fun cancelAllUploads() {
+        Log.d("UploadImagesInBackgroundUseCase", "Cancelling all uploads. Active jobs: ${uploadJobs.size}")
         uploadJobs.values.forEach { it.cancel() }
         uploadJobs.clear()
+        Log.d("UploadImagesInBackgroundUseCase", "All uploads cancelled")
     }
     
     /**
@@ -112,6 +137,8 @@ class UploadImagesInBackgroundUseCase @Inject constructor(
      * @return True if there's an active upload
      */
     fun isUploading(eventId: Int): Boolean {
-        return uploadJobs[eventId]?.isActive == true
+        val isActive = uploadJobs[eventId]?.isActive == true
+        Log.d("UploadImagesInBackgroundUseCase", "Checking upload status for event $eventId: $isActive")
+        return isActive
     }
 }

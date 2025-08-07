@@ -25,9 +25,12 @@ class SharedPreferencesHelper @Inject constructor(
     /**
      * Create full URL from file path
      * @param filePath The file path from API response (e.g., "/uploads/image.jpg")
-     * @return Full URL (e.g., "http://192.168.31.194:5000/uploads/image.jpg")
+     * @return Full URL (e.g., "http://192.168.31.194:5000/uploads/image.jpg") or null if filePath is null
      */
-    fun createFullImageUrl(filePath: String): String {
+    fun createFullImageUrl(filePath: String?): String? {
+        if (filePath.isNullOrBlank()) {
+            return null
+        }
         val baseUrl = getApiUrl().removeSuffix("/")
         val cleanFilePath = filePath.removePrefix("/")
         return "$baseUrl/$cleanFilePath"

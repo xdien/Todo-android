@@ -84,7 +84,7 @@ data class EventImage(
     val eventId: Int = 0,
     val originalName: String,
     val filename: String,
-    val filePath: String,
+    val filePath: String?,
     val fileSize: Int,
     val uploadedAt: String,
     val url: String

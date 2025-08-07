@@ -1,5 +1,6 @@
 package com.xdien.todoevent.data.repository
 
+import android.util.Log
 import com.xdien.todoevent.common.SharedPreferencesHelper
 import com.xdien.todoevent.data.api.ApiResponse
 import com.xdien.todoevent.data.api.EventApiService
@@ -208,34 +209,64 @@ class EventRepositoryImpl @Inject constructor(
 
     override suspend fun uploadEventImages(eventId: Int, imageFiles: List<File>): List<EventImage> {
         return try {
+            Log.d("EventRepositoryImpl", "Starting upload for event $eventId with ${imageFiles.size} images")
+            
             // Prepare multipart files
             val multipartFiles = imageFiles.map { file ->
+                Log.d("EventRepositoryImpl", "Preparing multipart file: ${file.name}, size: ${file.length()} bytes")
                 val requestBody = file.asRequestBody("image/*".toMediaTypeOrNull())
                 MultipartBody.Part.createFormData("images", file.name, requestBody)
             }
             
+            Log.d("EventRepositoryImpl", "Calling API to upload images for event $eventId")
+            Log.d("EventRepositoryImpl", "Multipart files count: ${multipartFiles.size}")
+            Log.d("EventRepositoryImpl", "About to call uploadEventImages API endpoint")
             val apiResponse = eventApiService.uploadEventImages(eventId, multipartFiles)
+            Log.d("EventRepositoryImpl", "API response received: success=${apiResponse.success}, message=${apiResponse.message}")
+            Log.d("EventRepositoryImpl", "API response data: ${apiResponse.data}")
+            Log.d("EventRepositoryImpl", "API response data type: ${apiResponse.data?.javaClass?.simpleName}")
             
             if (apiResponse.success) {
-                val uploadedImages = apiResponse.data.uploadedImages.map { apiImage ->
+                Log.d("EventRepositoryImpl", "API call successful, processing uploaded images")
+                Log.d("EventRepositoryImpl", "Response data keys: ${apiResponse.data?.javaClass?.declaredFields?.map { it.name }}")
+                Log.d("EventRepositoryImpl", "Uploaded images from API: ${apiResponse.data.uploadedImages}")
+                
+                val uploadedImages = apiResponse.data.uploadedImages.mapNotNull { apiImage ->
+                    Log.d("EventRepositoryImpl", "Processing API image: $apiImage")
                     // Create full URL using base URL + filePath
                     val fullUrl = sharedPreferencesHelper.createFullImageUrl(apiImage.filePath)
-                    apiImage.toDomain().copy(url = fullUrl)
+                    Log.d("EventRepositoryImpl", "Created full URL: $fullUrl for filePath: ${apiImage.filePath}")
+                    
+                    if (fullUrl != null) {
+                        apiImage.toDomain().copy(url = fullUrl)
+                    } else {
+                        Log.w("EventRepositoryImpl", "Skipping image with null filePath: ${apiImage.originalName}")
+                        null
+                    }
                 }
                 
+                Log.d("EventRepositoryImpl", "Processed ${uploadedImages.size} uploaded images")
+                
                 // Update local event with new images
+                Log.d("EventRepositoryImpl", "Updating local database with new images")
                 val currentEvent = getEventById(eventId).first()
                 currentEvent?.let { event ->
                     val updatedEvent = event.copy(images = event.images + uploadedImages)
                     val entity = updatedEvent.toEntity()
                     todoDao.updateTodo(entity)
+                    Log.d("EventRepositoryImpl", "Local database updated successfully")
+                } ?: run {
+                    Log.w("EventRepositoryImpl", "Event $eventId not found in local database")
                 }
                 
+                Log.d("EventRepositoryImpl", "Upload completed successfully, returning ${uploadedImages.size} images")
                 uploadedImages
             } else {
+                Log.e("EventRepositoryImpl", "API call failed: ${apiResponse.message}")
                 throw Exception(apiResponse.message)
             }
         } catch (e: Exception) {
+            Log.e("EventRepositoryImpl", "Exception during upload for event $eventId", e)
             throw e
         }
     }
@@ -301,16 +332,19 @@ class EventRepositoryImpl @Inject constructor(
             createdAt = this["createdAt"] as? String,
             updatedAt = this["updatedAt"] as? String,
             images = (this["images"] as? List<Map<String, Any>>)?.map { imageMap ->
-                ApiEventImage(
+                Log.d("EventRepositoryImpl", "Mapping image: $imageMap")
+                val mappedImage = ApiEventImage(
                     id = (imageMap["id"] as? Number)?.toInt() ?: 0,
-                    eventId = (imageMap["eventId"] as? Number)?.toInt() ?: 0,
-                    originalName = imageMap["originalName"] as? String ?: "",
+                    eventId = (imageMap["event_id"] as? Number)?.toInt() ?: 0,
+                    originalName = imageMap["original_name"] as? String ?: "",
                     filename = imageMap["filename"] as? String ?: "",
-                    filePath = imageMap["filePath"] as? String ?: "",
-                    fileSize = (imageMap["fileSize"] as? Number)?.toInt() ?: 0,
-                    uploadedAt = imageMap["uploadedAt"] as? String ?: "",
-                    url = imageMap["url"] as? String ?: ""
+                    filePath = imageMap["file_path"] as? String,
+                    fileSize = (imageMap["file_size"] as? Number)?.toInt() ?: 0,
+                    uploadedAt = imageMap["uploaded_at"] as? String ?: "",
+                    url = imageMap["url"] as? String
                 )
+                Log.d("EventRepositoryImpl", "Mapped image: id=${mappedImage.id}, filePath=${mappedImage.filePath}, url=${mappedImage.url}")
+                mappedImage
             }
         )
     }
@@ -340,7 +374,7 @@ private fun ApiEventImage.toDomain(): EventImage {
         filePath = this.filePath,
         fileSize = this.fileSize,
         uploadedAt = this.uploadedAt,
-        url = this.url
+        url = this.url ?: ""
     )
 }
 
