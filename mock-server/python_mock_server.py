@@ -187,18 +187,18 @@ def init_database():
             )
         
         # Insert initial events if table is empty
-        cursor = conn.execute("SELECT COUNT(*) FROM events")
-        if cursor.fetchone()[0] == 0:
-            logger.info("📝 Inserting initial events...")
-            initial_events = [
-                ("Hội thảo Công nghệ AI 2024", "Hội thảo về xu hướng và ứng dụng trí tuệ nhân tạo", 1, "2024-12-15T09:00:00", "Trung tâm Hội nghị Quốc gia", "2024-11-01T10:00:00"),
-                ("Workshop React Advanced", "Workshop nâng cao về React và Next.js", 2, "2024-12-20T14:00:00", "Coworking Space Tech Hub", "2024-11-02T15:30:00"),
-                ("Seminar Marketing Digital", "Chiến lược marketing trong thời đại số", 3, "2024-12-25T10:00:00", "Khách sạn Grand Plaza", "2024-11-03T08:45:00")
-            ]
-            conn.executemany(
-                "INSERT INTO events (title, description, type_id, start_date, location, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                initial_events
-            )
+        # cursor = conn.execute("SELECT COUNT(*) FROM events")
+        # if cursor.fetchone()[0] == 0:
+        #     logger.info("📝 Inserting initial events...")
+        #     initial_events = [
+        #         ("Hội thảo Công nghệ AI 2024", "Hội thảo về xu hướng và ứng dụng trí tuệ nhân tạo", 1, "2024-12-15T09:00:00", "Trung tâm Hội nghị Quốc gia", "2024-11-01T10:00:00"),
+        #         ("Workshop React Advanced", "Workshop nâng cao về React và Next.js", 2, "2024-12-20T14:00:00", "Coworking Space Tech Hub", "2024-11-02T15:30:00"),
+        #         ("Seminar Marketing Digital", "Chiến lược marketing trong thời đại số", 3, "2024-12-25T10:00:00", "Khách sạn Grand Plaza", "2024-11-03T08:45:00")
+        #     ]
+        #     conn.executemany(
+        #         "INSERT INTO events (title, description, type_id, start_date, location, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        #         initial_events
+        #     )
     
     logger.info("✅ Database initialization completed")
 
