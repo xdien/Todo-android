@@ -26,6 +26,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.xdien.todoevent.ui.viewmodel.EventFormViewModel
 import com.xdien.todoevent.ui.components.ImagePicker
+import com.xdien.todoevent.domain.usecase.RequestCameraPermissionUseCase
 import android.net.Uri
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -44,6 +45,7 @@ fun EventFormScreen(
     onEventSaved: () -> Unit = {},
     viewModel: EventFormViewModel = hiltViewModel()
 ) {
+    val permissionUseCase = remember { RequestCameraPermissionUseCase() }
     val uiState by viewModel.uiState.collectAsState()
     val eventTypes by viewModel.eventTypes.collectAsState()
     val selectedImages by viewModel.selectedImages.collectAsState()
@@ -96,6 +98,8 @@ fun EventFormScreen(
             )
         }
     }
+    
+
     
     Scaffold(
         topBar = {
@@ -304,7 +308,8 @@ fun EventFormScreen(
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    maxItems = 5
+                    maxItems = 5,
+                    permissionUseCase = permissionUseCase
                 )
             } else {
                 // For edit mode - show existing images
@@ -486,6 +491,8 @@ fun EventFormScreen(
                 textContentColor = MaterialTheme.colorScheme.onSurface
             )
         }
+        
+
     }
 }
 

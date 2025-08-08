@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.xdien.todoevent.domain.usecase.RequestCameraPermissionUseCase
 
 
 /**
@@ -99,18 +100,46 @@ fun ImagePicker(
     onImageSelected: (Uri) -> Unit,
     onImageRemoved: (Uri) -> Unit,
     modifier: Modifier = Modifier,
-    maxItems: Int = 5
+    maxItems: Int = 5,
+    permissionUseCase: RequestCameraPermissionUseCase? = null
 ) {
     val context = LocalContext.current
     val contentResolver: ContentResolver = context.contentResolver
     var showImageSourceDialog by remember { mutableStateOf(false) }
     var cameraImages by remember { mutableStateOf<Set<Uri>>(emptySet()) }
+    var hasPermission by remember { mutableStateOf(false) }
+    var showPermissionDialog by remember { mutableStateOf(false) }
     
     // Track original camera URIs to prevent conversion
     var originalCameraUris by remember { mutableStateOf<Map<Uri, Uri>>(emptyMap()) }
     
     // Calculate remaining slots
     val remainingSlots = maxItems - selectedImages.size
+    
+    LaunchedEffect(Unit) {
+        if (permissionUseCase != null) {
+            hasPermission = permissionUseCase.allPermissionsGranted(context)
+        } else {
+            hasPermission = true
+        }
+    }
+    
+    LaunchedEffect(permissionUseCase) {
+        if (permissionUseCase != null) {
+            hasPermission = permissionUseCase.allPermissionsGranted(context)
+        }
+    }
+    
+    // Permission launcher
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val allGranted = permissions.values.all { it }
+        hasPermission = allGranted
+        if (allGranted) {
+            showImageSourceDialog = true
+        }
+    }
     
     // Photo picker launcher for selecting single image (when only 1 slot remains)
     val singlePhotoPickerLauncher = rememberLauncherForActivityResult(
@@ -178,14 +207,11 @@ fun ImagePicker(
                     val fileName = filePath?.substringAfterLast("/") ?: "camera_image.jpg"
                     val fileUri = Uri.fromFile(File(context.cacheDir, fileName))
                     
-                    android.util.Log.d("ImagePicker", "Original camera URI: $cameraImageUri")
-                    android.util.Log.d("ImagePicker", "Converted file URI: $fileUri")
                     
                     // Mark this as a camera image using file URI
                     cameraImages = cameraImages + fileUri
                     // Store mapping from file URI to original content URI
                     originalCameraUris = originalCameraUris + (fileUri to cameraImageUri!!)
-                    android.util.Log.d("ImagePicker", "Camera image added to set. Total camera images: ${cameraImages.size}")
                     onImageSelected(fileUri)
                     android.util.Log.d("ImagePicker", "Camera image selected successfully")
                 } else {
@@ -247,7 +273,17 @@ fun ImagePicker(
                             ) {
                                 // Show image source dialog when clicked
                                 IconButton(
-                                    onClick = { showImageSourceDialog = true },
+                                    onClick = { 
+                                        if (hasPermission) {
+                                            showImageSourceDialog = true
+                                        } else {
+                                            permissionUseCase?.let { useCase ->
+                                                if (useCase.needsPermissionRequest(context)) {
+                                                    permissionLauncher.launch(useCase.getRequiredPermissions())
+                                                }
+                                            }
+                                        }
+                                    },
                                     modifier = Modifier.size(48.dp)
                                 ) {
                                     Icon(
@@ -473,8 +509,8 @@ fun ImagePicker(
                     Button(
                         onClick = {
                             showImageSourceDialog = false
-                            // Check if there are remaining slots
-                            if (remainingSlots > 0) {
+                            // Check if there are remaining slots and permission
+                            if (remainingSlots > 0 && hasPermission) {
                                 // Create a temporary file for camera capture
                                 val tempFile = File.createTempFile("camera_", ".jpg", context.cacheDir)
                                 cameraImageUri = FileProvider.getUriForFile(
@@ -486,9 +522,12 @@ fun ImagePicker(
                                 android.util.Log.d("ImagePicker", "Temp file path: ${tempFile.absolutePath}")
                                 android.util.Log.d("ImagePicker", "Temp file exists: ${tempFile.exists()}")
                                 cameraLauncher.launch(cameraImageUri!!)
+                            } else if (!hasPermission) {
+                                // Hiển thị thông báo cần quyền
+                                android.util.Log.w("ImagePicker", "Camera permission not granted")
                             }
                         },
-                        enabled = remainingSlots > 0
+                        enabled = remainingSlots > 0 && hasPermission
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
@@ -503,7 +542,7 @@ fun ImagePicker(
                     Button(
                         onClick = {
                             showImageSourceDialog = false
-                            if (remainingSlots > 0) {
+                            if (remainingSlots > 0 && hasPermission) {
                                 if (remainingSlots == 1) {
                                     // Use single picker when only 1 slot remains
                                     singlePhotoPickerLauncher.launch(
@@ -519,9 +558,11 @@ fun ImagePicker(
                                             .build()
                                     )
                                 }
+                            } else if (!hasPermission) {
+                                android.util.Log.w("ImagePicker", "Photo permission not granted")
                             }
                         },
-                        enabled = remainingSlots > 0
+                        enabled = remainingSlots > 0 && hasPermission
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
@@ -536,6 +577,41 @@ fun ImagePicker(
             dismissButton = {
                 TextButton(
                     onClick = { showImageSourceDialog = false }
+                ) {
+                    Text("Hủy")
+                }
+            }
+        )
+    }
+    
+    // Permission Dialog
+    if (showPermissionDialog) {
+        AlertDialog(
+            onDismissRequest = { showPermissionDialog = false },
+            title = {
+                Text("Quyền truy cập cần thiết")
+            },
+            text = {
+                Text(
+                    text = permissionUseCase?.getPermissionExplanation() 
+                        ?: "Ứng dụng cần quyền truy cập camera và ảnh để chụp và chọn ảnh."
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showPermissionDialog = false
+                        permissionUseCase?.let { useCase ->
+                            permissionLauncher.launch(useCase.getRequiredPermissions())
+                        }
+                    }
+                ) {
+                    Text("Cấp quyền")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showPermissionDialog = false }
                 ) {
                     Text("Hủy")
                 }

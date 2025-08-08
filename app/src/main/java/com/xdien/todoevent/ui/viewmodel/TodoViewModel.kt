@@ -10,6 +10,9 @@ import com.xdien.todoevent.domain.model.EventType
 import com.xdien.todoevent.domain.repository.EventRepository
 import com.xdien.todoevent.domain.usecase.GetEventByIdUseCase
 import com.xdien.todoevent.domain.usecase.GetEventTypesUseCase
+import com.xdien.todoevent.domain.usecase.LoadEventsUseCase
+import com.xdien.todoevent.domain.usecase.LoadEventsInput
+import com.xdien.todoevent.domain.usecase.LoadEventsResult
 import com.xdien.todoevent.ui.components.toChipItems
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,7 +30,8 @@ class TodoViewModel @Inject constructor(
     private val eventRepository: EventRepository,
     private val eventBus: EventBus,
     private val getEventByIdUseCase: GetEventByIdUseCase,
-    private val getEventTypesUseCase: GetEventTypesUseCase
+    private val getEventTypesUseCase: GetEventTypesUseCase,
+    private val loadEventsUseCase: LoadEventsUseCase
 ) : ViewModel() {
     
     private val _events = MutableStateFlow<List<Event>>(emptyList())
@@ -117,30 +121,32 @@ class TodoViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.value = true
             _isNotFoundError.value = false
-            try {
-                // Fetch events from API
-                eventRepository.getEvents(null, null).collect { eventList ->
-                    android.util.Log.d("TodoViewModel", "Received ${eventList.size} events from repository")
-                    eventList.forEach { event ->
-                        android.util.Log.d("TodoViewModel", "Event: ${event.title} (ID: ${event.id})")
+            
+            val input = LoadEventsInput(null, null)
+            loadEventsUseCase.execute(input).collect { result ->
+                when (result) {
+                    is LoadEventsResult.Success -> {
+                        android.util.Log.d("TodoViewModel", "Received ${result.events.size} events from use case")
+                        result.events.forEach { event ->
+                            android.util.Log.d("TodoViewModel", "Event: ${event.title} (ID: ${event.id})")
+                        }
+                        _events.value = result.events
+                        _isNotFoundError.value = false
                     }
-                    _events.value = eventList
+                    is LoadEventsResult.NotFoundError -> {
+                        android.util.Log.e("TodoViewModel", "404 Error loading events: ${result.message}")
+                        _isNotFoundError.value = true
+                        _events.value = emptyList()
+                    }
+                    is LoadEventsResult.Error -> {
+                        android.util.Log.e("TodoViewModel", "Error loading events: ${result.message}")
+                        _isNotFoundError.value = false
+                        _events.value = emptyList()
+                    }
                 }
-            } catch (e: Exception) {
-                android.util.Log.e("TodoViewModel", "Error loading events", e)
-                // Check if it's a 404 error
-                val isNotFoundError = e.message?.contains("404") == true || 
-                                    e.message?.contains("not found", ignoreCase = true) == true ||
-                                    e.message?.contains("không tìm thấy", ignoreCase = true) == true
-                
-                if (isNotFoundError) {
-                    _isNotFoundError.value = true
-                }
-                
-                _events.value = emptyList()
-            } finally {
-                _isLoading.value = false
             }
+            
+            _isLoading.value = false
         }
     }
     
@@ -170,13 +176,42 @@ class TodoViewModel @Inject constructor(
             try {
                 android.util.Log.d("TodoViewModel", "Searching for: $query")
                 
-                // Try API search first
-                eventRepository.getEvents(query, null).collect { searchResults ->
-                    android.util.Log.d("TodoViewModel", "Search results from API: ${searchResults.size} events")
-                    _searchResults.value = searchResults
+                // Try API search first using LoadEventsUseCase
+                val input = LoadEventsInput(query, null)
+                loadEventsUseCase.execute(input).collect { result ->
+                    when (result) {
+                        is LoadEventsResult.Success -> {
+                            android.util.Log.d("TodoViewModel", "Search results from API: ${result.events.size} events")
+                            _searchResults.value = result.events
+                        }
+                        is LoadEventsResult.NotFoundError -> {
+                            android.util.Log.e("TodoViewModel", "404 Error in search, trying local search: ${result.message}")
+                            // Fallback to local search
+                            try {
+                                val localResults = searchEventsLocally(query)
+                                android.util.Log.d("TodoViewModel", "Local search results: ${localResults.size} events")
+                                _searchResults.value = localResults
+                            } catch (localError: Exception) {
+                                android.util.Log.e("TodoViewModel", "Local search also failed", localError)
+                                _searchResults.value = emptyList()
+                            }
+                        }
+                        is LoadEventsResult.Error -> {
+                            android.util.Log.e("TodoViewModel", "API search failed, trying local search: ${result.message}")
+                            // Fallback to local search
+                            try {
+                                val localResults = searchEventsLocally(query)
+                                android.util.Log.d("TodoViewModel", "Local search results: ${localResults.size} events")
+                                _searchResults.value = localResults
+                            } catch (localError: Exception) {
+                                android.util.Log.e("TodoViewModel", "Local search also failed", localError)
+                                _searchResults.value = emptyList()
+                            }
+                        }
+                    }
                 }
             } catch (e: Exception) {
-                android.util.Log.e("TodoViewModel", "API search failed, trying local search", e)
+                android.util.Log.e("TodoViewModel", "Exception in search, trying local search", e)
                 
                 // Fallback to local search
                 try {
@@ -302,16 +337,29 @@ class TodoViewModel @Inject constructor(
     fun refreshEvents() {
         viewModelScope.launch {
             _isLoading.value = true
-            try {
-                // Fetch fresh data from API
-                eventRepository.getEvents(null, null).collect { eventList ->
-                    _events.value = eventList
+            
+            val input = LoadEventsInput(null, null)
+            loadEventsUseCase.execute(input).collect { result ->
+                when (result) {
+                    is LoadEventsResult.Success -> {
+                        _events.value = result.events
+                        // Broadcast events refreshed
+                        eventBus.broadcastEventsRefreshed()
+                    }
+                    is LoadEventsResult.NotFoundError -> {
+                        android.util.Log.e("TodoViewModel", "404 Error refreshing events: ${result.message}")
+                        _isNotFoundError.value = true
+                        _events.value = emptyList()
+                    }
+                    is LoadEventsResult.Error -> {
+                        android.util.Log.e("TodoViewModel", "Error refreshing events: ${result.message}")
+                        _isNotFoundError.value = false
+                        _events.value = emptyList()
+                    }
                 }
-                // Broadcast events refreshed
-                eventBus.broadcastEventsRefreshed()
-            } finally {
-                _isLoading.value = false
             }
+            
+            _isLoading.value = false
         }
     }
     

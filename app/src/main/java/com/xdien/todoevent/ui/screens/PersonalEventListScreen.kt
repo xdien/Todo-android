@@ -29,6 +29,7 @@ fun PersonalEventListCompose(
 ) {
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val isSearching by viewModel.isSearching.collectAsStateWithLifecycle()
+    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val eventTypes by viewModel.eventTypes.collectAsStateWithLifecycle()
     val isNotFoundError by viewModel.isNotFoundError.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -96,8 +97,8 @@ fun PersonalEventListCompose(
                 )
             }
         }
-        // Show empty state when no events found (but not 404 error)
-        else if (filteredEvents.isEmpty() && !isLoading && !isSearching) {
+        // Show search no results message when searching but no results found
+        else if (filteredEvents.isEmpty() && !isLoading && !isSearching && searchQuery.isNotEmpty()) {
             Column(
                 modifier = Modifier
                     .align(Alignment.Center)
@@ -108,6 +109,28 @@ fun PersonalEventListCompose(
                     text = "Không tìm thấy sự kiện nào",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        // Show empty state with suggestion to create new event when no events exist
+        else if (filteredEvents.isEmpty() && !isLoading && !isSearching && searchQuery.isEmpty()) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Chưa có sự kiện nào",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Tạo sự kiện đầu tiên của bạn bằng cách nhấn nút + bên dưới",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
             }
         }

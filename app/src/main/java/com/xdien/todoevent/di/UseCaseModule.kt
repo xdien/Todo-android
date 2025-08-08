@@ -5,6 +5,8 @@ import com.xdien.todoevent.domain.usecase.UploadImagesInBackgroundUseCase
 import com.xdien.todoevent.domain.usecase.CreateEventUseCase
 import com.xdien.todoevent.domain.usecase.UpdateEventUseCase
 import com.xdien.todoevent.domain.usecase.GetEventTypesUseCase
+import com.xdien.todoevent.domain.usecase.LoadEventsUseCase
+import com.xdien.todoevent.domain.usecase.RequestCameraPermissionUseCase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -53,5 +55,19 @@ object UseCaseModule {
         eventRepository: com.xdien.todoevent.domain.repository.EventRepository
     ): GetEventTypesUseCase {
         return GetEventTypesUseCase(eventRepository)
+    }
+    
+    @Provides
+    @Singleton
+    fun provideLoadEventsUseCase(
+        eventRepository: com.xdien.todoevent.domain.repository.EventRepository
+    ): LoadEventsUseCase {
+        return LoadEventsUseCase(eventRepository)
+    }
+    
+    @Provides
+    @Singleton
+    fun provideRequestCameraPermissionUseCase(): RequestCameraPermissionUseCase {
+        return RequestCameraPermissionUseCase()
     }
 }
