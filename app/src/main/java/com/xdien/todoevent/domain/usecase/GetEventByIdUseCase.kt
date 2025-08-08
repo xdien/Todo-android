@@ -27,10 +27,19 @@ class GetEventByIdUseCase @Inject constructor(
             if (event != null) {
                 Result.success(event)
             } else {
+                // If event is null and no exception was thrown, it means event doesn't exist locally
+                // This should not happen with our current logic, but handle it gracefully
                 Result.failure(Exception("Event not found"))
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            // Check if it's a 404 error and provide a more specific error message
+            val errorMessage = when {
+                e.message?.contains("404") == true -> "Sự kiện không tồn tại (404)"
+                e.message?.contains("not found", ignoreCase = true) == true -> "Sự kiện không tìm thấy"
+                e.message?.contains("không tìm thấy", ignoreCase = true) == true -> "Sự kiện không tìm thấy"
+                else -> e.message ?: "Không thể tải sự kiện"
+            }
+            Result.failure(Exception(errorMessage))
         }
     }
 }

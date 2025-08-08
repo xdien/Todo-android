@@ -98,13 +98,30 @@ class EventRepositoryImpl @Inject constructor(
                     }
                 } else {
                     Log.e("EventRepositoryImpl", "API call failed: ${apiResponse.message}")
-                    // Fallback to local database
-                    getEventsFromLocal(keyword, typeId)
+                    // Check if it's a 404 error
+                    if (apiResponse.message?.contains("404") == true || 
+                        apiResponse.message?.contains("not found", ignoreCase = true) == true ||
+                        apiResponse.message?.contains("không tìm thấy", ignoreCase = true) == true) {
+                        // Don't fallback for 404 errors, return empty list
+                        Log.d("EventRepositoryImpl", "Events not found (404), not falling back to local")
+                        flow { emit(emptyList()) }
+                    } else {
+                        // Fallback to local database for other errors
+                        getEventsFromLocal(keyword, typeId)
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("EventRepositoryImpl", "API call failed with exception, falling back to local", e)
-                // Fallback to local database
-                getEventsFromLocal(keyword, typeId)
+                // Check if it's a 404 error
+                if (e.message?.contains("404") == true || 
+                    e.message?.contains("not found", ignoreCase = true) == true) {
+                    // Don't fallback for 404 errors, return empty list
+                    Log.d("EventRepositoryImpl", "Events not found (404), not falling back to local")
+                    flow { emit(emptyList()) }
+                } else {
+                    // Fallback to local database for other errors
+                    getEventsFromLocal(keyword, typeId)
+                }
             }
         } catch (e: Exception) {
             Log.e("EventRepositoryImpl", "Exception during getEvents", e)
@@ -185,17 +202,35 @@ class EventRepositoryImpl @Inject constructor(
                     
                     flow { emit(event) }
                 } else {
-                    // Fallback to local database
-                    getEventByIdFromLocal(id)
+                    // Check if it's a 404 error
+                    if (apiResponse.message?.contains("404") == true || 
+                        apiResponse.message?.contains("not found", ignoreCase = true) == true ||
+                        apiResponse.message?.contains("không tìm thấy", ignoreCase = true) == true) {
+                        // Don't fallback for 404 errors, throw exception
+                        Log.d("EventRepositoryImpl", "Event not found (404), throwing exception")
+                        throw Exception("404: ${apiResponse.message}")
+                    } else {
+                        // Fallback to local database for other errors
+                        getEventByIdFromLocal(id)
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("EventRepositoryImpl", "API call failed, falling back to local", e)
-                // Fallback to local database
-                getEventByIdFromLocal(id)
+                // Check if it's a 404 error
+                if (e.message?.contains("404") == true || 
+                    e.message?.contains("not found", ignoreCase = true) == true) {
+                    // Don't fallback for 404 errors, throw exception
+                    Log.d("EventRepositoryImpl", "Event not found (404), throwing exception")
+                    throw e
+                } else {
+                    // Fallback to local database for other errors
+                    getEventByIdFromLocal(id)
+                }
             }
         } catch (e: Exception) {
-            // Return null if both API and local fail
-            flow { emit(null) }
+            // Re-throw the exception instead of returning null
+            // This allows the use case to handle the error properly
+            throw e
         }
     }
     

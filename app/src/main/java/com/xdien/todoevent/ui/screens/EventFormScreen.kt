@@ -8,6 +8,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.SnackbarHost
@@ -52,6 +53,7 @@ fun EventFormScreen(
     // Error dialog state
     var showErrorDialog by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
+    var isNotFoundError by remember { mutableStateOf(false) }
     
     // Load event for editing if eventId is provided
     LaunchedEffect(eventId) {
@@ -69,6 +71,11 @@ fun EventFormScreen(
     LaunchedEffect(uiState.error) {
         if (uiState.error != null) {
             errorMessage = uiState.error!!
+            // Check if it's a 404 error
+            isNotFoundError = uiState.error!!.contains("404") || 
+                             uiState.error!!.contains("not found", ignoreCase = true) ||
+                             uiState.error!!.contains("không tìm thấy", ignoreCase = true) ||
+                             uiState.error!!.contains("không tồn tại", ignoreCase = true)
             showErrorDialog = true
         }
     }
@@ -429,12 +436,16 @@ fun EventFormScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Warning,
-                            contentDescription = "Error",
+                            imageVector = if (isNotFoundError) Icons.Default.Info else Icons.Default.Warning,
+                            contentDescription = if (isNotFoundError) "Not Found" else "Error",
                             tint = MaterialTheme.colorScheme.error
                         )
                         Text(
-                            text = if (uiState.isEditMode) "Lỗi cập nhật" else "Lỗi tạo sự kiện",
+                            text = when {
+                                isNotFoundError -> "Sự kiện không tồn tại"
+                                uiState.isEditMode -> "Lỗi cập nhật"
+                                else -> "Lỗi tạo sự kiện"
+                            },
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Medium
                         )
@@ -447,13 +458,27 @@ fun EventFormScreen(
                     )
                 },
                 confirmButton = {
-                    TextButton(
-                        onClick = {
-                            showErrorDialog = false
-                            viewModel.clearError()
+                    if (isNotFoundError) {
+                        // For 404 errors, show "Quay lại" button
+                        TextButton(
+                            onClick = {
+                                showErrorDialog = false
+                                viewModel.clearError()
+                                onNavigateBack()
+                            }
+                        ) {
+                            Text("Quay lại")
                         }
-                    ) {
-                        Text("Đóng")
+                    } else {
+                        // For other errors, show "Đóng" button
+                        TextButton(
+                            onClick = {
+                                showErrorDialog = false
+                                viewModel.clearError()
+                            }
+                        ) {
+                            Text("Đóng")
+                        }
                     }
                 },
                 containerColor = MaterialTheme.colorScheme.surface,

@@ -90,9 +90,20 @@ class EventFormViewModel @Inject constructor(
                         error = null
                     )
                 }.onFailure { error ->
+                    // Check if it's a 404 error
+                    val isNotFoundError = error.message?.contains("404") == true || 
+                                         error.message?.contains("not found", ignoreCase = true) == true ||
+                                         error.message?.contains("không tìm thấy", ignoreCase = true) == true
+                    
+                    val errorMessage = if (isNotFoundError) {
+                        "Sự kiện không tồn tại hoặc đã bị xóa"
+                    } else {
+                        "Không thể tải thông tin sự kiện: ${error.message}"
+                    }
+                    
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        error = "Không thể tải thông tin sự kiện: ${error.message}"
+                        error = errorMessage
                     )
                 }
             } catch (e: Exception) {

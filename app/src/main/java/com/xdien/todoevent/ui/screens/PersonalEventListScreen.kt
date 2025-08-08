@@ -30,6 +30,7 @@ fun PersonalEventListCompose(
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val isSearching by viewModel.isSearching.collectAsStateWithLifecycle()
     val eventTypes by viewModel.eventTypes.collectAsStateWithLifecycle()
+    val isNotFoundError by viewModel.isNotFoundError.collectAsStateWithLifecycle()
     val context = LocalContext.current
     
     // Debug log
@@ -80,8 +81,23 @@ fun PersonalEventListCompose(
             }
         )
         
-        // Show empty state when no events found
-        if (filteredEvents.isEmpty() && !isLoading && !isSearching) {
+        // Show 404 error message in center of screen
+        if (isNotFoundError) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Not found",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        // Show empty state when no events found (but not 404 error)
+        else if (filteredEvents.isEmpty() && !isLoading && !isSearching) {
             Column(
                 modifier = Modifier
                     .align(Alignment.Center)

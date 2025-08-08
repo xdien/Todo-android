@@ -8,12 +8,15 @@ import com.xdien.todoevent.common.EventBus
 import com.xdien.todoevent.domain.model.Event
 import com.xdien.todoevent.domain.model.EventType
 import com.xdien.todoevent.domain.repository.EventRepository
+import com.xdien.todoevent.domain.usecase.GetEventByIdUseCase
+import com.xdien.todoevent.domain.usecase.GetEventTypesUseCase
 import com.xdien.todoevent.ui.components.toChipItems
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
@@ -22,7 +25,9 @@ import javax.inject.Inject
 @HiltViewModel
 class TodoViewModel @Inject constructor(
     private val eventRepository: EventRepository,
-    private val eventBus: EventBus
+    private val eventBus: EventBus,
+    private val getEventByIdUseCase: GetEventByIdUseCase,
+    private val getEventTypesUseCase: GetEventTypesUseCase
 ) : ViewModel() {
     
     private val _events = MutableStateFlow<List<Event>>(emptyList())
@@ -54,6 +59,17 @@ class TodoViewModel @Inject constructor(
     // For event detail screen
     private val _selectedEvent = MutableStateFlow<Event?>(null)
     val selectedEvent: StateFlow<Event?> = _selectedEvent.asStateFlow()
+    
+    // For event detail screen error states
+    private val _isEventLoading = MutableStateFlow(false)
+    val isEventLoading: StateFlow<Boolean> = _isEventLoading.asStateFlow()
+    
+    private val _eventError = MutableStateFlow<String?>(null)
+    val eventError: StateFlow<String?> = _eventError.asStateFlow()
+    
+    // For list screen 404 error
+    private val _isNotFoundError = MutableStateFlow(false)
+    val isNotFoundError: StateFlow<Boolean> = _isNotFoundError.asStateFlow()
     
     // For chip selection
     private val _selectedChipIds = MutableStateFlow<Set<Long>>(emptySet())
@@ -108,6 +124,7 @@ class TodoViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.value = true
             _isLoadingLiveData.value = true
+            _isNotFoundError.value = false
             try {
                 // Fetch events from API
                 eventRepository.getEvents(null, null).collect { eventList ->
@@ -120,6 +137,15 @@ class TodoViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 android.util.Log.e("TodoViewModel", "Error loading events", e)
+                // Check if it's a 404 error
+                val isNotFoundError = e.message?.contains("404") == true || 
+                                    e.message?.contains("not found", ignoreCase = true) == true ||
+                                    e.message?.contains("không tìm thấy", ignoreCase = true) == true
+                
+                if (isNotFoundError) {
+                    _isNotFoundError.value = true
+                }
+                
                 _events.value = emptyList()
                 _eventsLiveData.value = emptyList()
             } finally {
@@ -218,7 +244,7 @@ class TodoViewModel @Inject constructor(
     fun loadEventTypes() {
         viewModelScope.launch {
             try {
-                val result = eventRepository.getEventTypes()
+                val result = getEventTypesUseCase()
                 result.onSuccess { types ->
                     _eventTypes.value = types
                 }.onFailure { error ->
@@ -285,6 +311,14 @@ class TodoViewModel @Inject constructor(
                     android.util.Log.w("TodoViewModel", "Event with ID $id not found in current list")
                 }
                 
+                // Update search results by removing the deleted event
+                val currentSearchResults = _searchResults.value.toMutableList()
+                val removedFromSearch = currentSearchResults.removeAll { it.id == id }
+                if (removedFromSearch) {
+                    _searchResults.value = currentSearchResults
+                    android.util.Log.d("TodoViewModel", "Event removed from search results. Remaining search results: ${currentSearchResults.size}")
+                }
+                
                 // Broadcast event deleted
                 eventBus.broadcastEventDeleted()
             } catch (e: Exception) {
@@ -293,18 +327,57 @@ class TodoViewModel @Inject constructor(
         }
     }
     
-    // Get event by ID for detail screen
+    // Get event by ID for detail screen using use case
     suspend fun getEventById(id: Int): Flow<Event?> {
-        return eventRepository.getEventById(id)
+        return flow {
+            try {
+                _isEventLoading.value = true
+                _eventError.value = null
+                
+                val result = getEventByIdUseCase(id)
+                if (result.isSuccess) {
+                    emit(result.getOrNull())
+                } else {
+                    val error = result.exceptionOrNull()
+                    _eventError.value = error?.message ?: "Unknown error occurred"
+                    emit(null)
+                }
+            } catch (e: Exception) {
+                _eventError.value = e.message ?: "Unknown error occurred"
+                emit(null)
+            } finally {
+                _isEventLoading.value = false
+            }
+        }
     }
     
     // Load event by ID and update selectedEvent
     fun loadEventById(id: Int) {
         viewModelScope.launch {
-            eventRepository.getEventById(id).collect { event ->
-                _selectedEvent.value = event
+            _isEventLoading.value = true
+            _eventError.value = null
+            
+            try {
+                val result = getEventByIdUseCase(id)
+                if (result.isSuccess) {
+                    _selectedEvent.value = result.getOrNull()
+                } else {
+                    val error = result.exceptionOrNull()
+                    _eventError.value = error?.message ?: "Unknown error occurred"
+                    _selectedEvent.value = null
+                }
+            } catch (e: Exception) {
+                _eventError.value = e.message ?: "Unknown error occurred"
+                _selectedEvent.value = null
+            } finally {
+                _isEventLoading.value = false
             }
         }
+    }
+    
+    // Clear event error
+    fun clearEventError() {
+        _eventError.value = null
     }
     
     /**

@@ -105,6 +105,8 @@ fun EventCard(
                     .padding(start = 16.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
+                // Add some top spacing since we removed the event type badge
+                Spacer(modifier = Modifier.height(4.dp))
                 // Title
                 Text(
                     text = event.title,
@@ -115,20 +117,20 @@ fun EventCard(
                     maxLines = 2
                 )
                 
-                // Event Type Badge
-                Card(
-                    modifier = Modifier.wrapContentWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
-                ) {
-                    Text(
-                        text = eventTypeName ?: "Type ${event.eventTypeId}",
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
+                // Event Type Badge - Hidden as requested
+                // Card(
+                //     modifier = Modifier.wrapContentWidth(),
+                //     colors = CardDefaults.cardColors(
+                //         containerColor = MaterialTheme.colorScheme.primaryContainer
+                //     )
+                // ) {
+                //     Text(
+                //         text = eventTypeName ?: "Type ${event.eventTypeId}",
+                //         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                //         style = MaterialTheme.typography.labelSmall,
+                //         color = MaterialTheme.colorScheme.onPrimaryContainer
+                //     )
+                // }
                 
                 // Time and location
                 Column(

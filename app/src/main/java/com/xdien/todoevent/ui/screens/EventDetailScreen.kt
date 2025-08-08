@@ -7,6 +7,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,9 +23,11 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.xdien.todoevent.common.EventBus
 import com.xdien.todoevent.domain.model.Event
+import com.xdien.todoevent.domain.usecase.GetEventByIdUseCase
 import com.xdien.todoevent.ui.viewmodel.TodoViewModel
 import java.text.SimpleDateFormat
 import java.util.*
+import javax.inject.Inject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,14 +38,14 @@ fun EventDetailScreen(
     viewModel: TodoViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    var event by remember { mutableStateOf<Event?>(null) }
+    val event by viewModel.selectedEvent.collectAsStateWithLifecycle()
     val eventTypes by viewModel.eventTypes.collectAsStateWithLifecycle()
+    val isEventLoading by viewModel.isEventLoading.collectAsStateWithLifecycle()
+    val eventError by viewModel.eventError.collectAsStateWithLifecycle()
     
     // Load event initially
     LaunchedEffect(eventId) {
-        viewModel.getEventById(eventId.toInt()).collect { eventData ->
-            event = eventData
-        }
+        viewModel.loadEventById(eventId.toInt())
     }
     
     // Listen to event changes from EventBus and refresh if the current event is updated
@@ -54,12 +57,7 @@ fun EventDetailScreen(
                 is EventBus.EventChange.EventUpdated -> {
                     // Refresh the current event if it matches the eventId
                     android.util.Log.d("EventDetailScreen", "Event updated, refreshing event details for ID: $eventId")
-                    viewModel.getEventById(eventId.toInt()).collect { updatedEvent ->
-                        if (updatedEvent != null) {
-                            event = updatedEvent
-                            android.util.Log.d("EventDetailScreen", "Event details refreshed: ${updatedEvent.title}")
-                        }
-                    }
+                    viewModel.loadEventById(eventId.toInt())
                 }
                 is EventBus.EventChange.EventDeleted -> {
                     // If the current event is deleted, navigate back
@@ -141,14 +139,50 @@ fun EventDetailScreen(
                 )
             }
         } ?: run {
-            // Loading state
+            // Show appropriate state based on loading and error
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator()
+                when {
+                    isEventLoading -> {
+                        CircularProgressIndicator()
+                    }
+                    eventError != null -> {
+                        // Error state - check if it's a 404 error
+                        val isNotFoundError = eventError?.contains("404") == true || 
+                                             eventError?.contains("not found", ignoreCase = true) == true ||
+                                             eventError?.contains("không tìm thấy", ignoreCase = true) == true
+                        
+                        if (isNotFoundError) {
+                            // Not found state
+                            NotFoundState(
+                                onNavigateBack = onNavigateBack,
+                                onRetry = {
+                                    viewModel.clearEventError()
+                                    // Reload the event
+                                    viewModel.loadEventById(eventId.toInt())
+                                }
+                            )
+                        } else {
+                            // Other error state
+                            ErrorState(
+                                errorMessage = eventError ?: "Unknown error occurred",
+                                onRetry = {
+                                    viewModel.clearEventError()
+                                    // Reload the event
+                                    viewModel.loadEventById(eventId.toInt())
+                                }
+                            )
+                        }
+                    }
+                    else -> {
+                        // Initial loading state
+                        CircularProgressIndicator()
+                    }
+                }
             }
         }
     }
@@ -494,4 +528,114 @@ private fun shareEvent(context: android.content.Context, event: Event, eventType
     
     val shareIntent = android.content.Intent.createChooser(sendIntent, "Chia sẻ sự kiện")
     context.startActivity(shareIntent)
+}
+
+@Composable
+fun NotFoundState(
+    onNavigateBack: () -> Unit,
+    onRetry: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+                    Icon(
+                Icons.Default.Info,
+                contentDescription = null,
+                modifier = Modifier.size(80.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Text(
+            text = "Không tìm thấy sự kiện",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Text(
+            text = "Sự kiện bạn đang tìm kiếm có thể đã bị xóa hoặc không tồn tại.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            OutlinedButton(
+                onClick = onNavigateBack
+            ) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Quay lại")
+            }
+            
+            Button(
+                onClick = onRetry
+            ) {
+                Icon(Icons.Default.Refresh, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Thử lại")
+            }
+        }
+    }
+}
+
+@Composable
+fun ErrorState(
+    errorMessage: String,
+    onRetry: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+                    Icon(
+                Icons.Default.Warning,
+                contentDescription = null,
+                modifier = Modifier.size(80.dp),
+                tint = MaterialTheme.colorScheme.error
+            )
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Text(
+            text = "Đã xảy ra lỗi",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Text(
+            text = errorMessage,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        Button(
+            onClick = onRetry
+        ) {
+            Icon(Icons.Default.Refresh, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Thử lại")
+        }
+    }
 } 
