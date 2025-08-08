@@ -24,6 +24,7 @@ fun PersonalEventListCompose(
     onAddEventClick: () -> Unit = {}
 ) {
     val isLoading by viewModel.isLoading.collectAsState()
+    val eventTypes by viewModel.eventTypes.collectAsState()
 
     // Debug log
     android.util.Log.d("PersonalEventListCompose", "Rendering with ${filteredEvents.size} filtered events")
@@ -40,9 +41,11 @@ fun PersonalEventListCompose(
         ) {
             items(filteredEvents) { event ->
                 android.util.Log.d("PersonalEventListCompose", "Rendering event item: ${event.title}")
+                val eventTypeName = eventTypes.find { it.id == event.eventTypeId }?.name
                 EventCard(
                     event = event,
-                    onClick = { onEventClick(event) }
+                    onClick = { onEventClick(event) },
+                    eventTypeName = eventTypeName
                 )
             }
         }

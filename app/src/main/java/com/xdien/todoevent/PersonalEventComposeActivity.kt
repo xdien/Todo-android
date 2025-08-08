@@ -49,6 +49,7 @@ class PersonalEventComposeActivity : ComponentActivity() {
             TodoEventTheme {
                 val viewModel: TodoViewModel = hiltViewModel()
                 val events by viewModel.events.collectAsState()
+                val eventTypes by viewModel.eventTypes.collectAsState()
                 
                 // Search state
                 var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -67,14 +68,15 @@ class PersonalEventComposeActivity : ComponentActivity() {
 
                 
                 // Create chip items for event types
-                val eventTypeChips = remember(events) {
-                    val eventTypes = events
+                val eventTypeChips = remember(events, eventTypes) {
+                    val eventTypeIds = events
                         .map { it.eventTypeId }
                         .distinct()
-                    eventTypes.map { eventTypeId ->
+                    eventTypeIds.map { eventTypeId ->
+                        val eventType = eventTypes.find { it.id == eventTypeId }
                         ChipItem(
                             id = eventTypeId.toString(),
-                            title = "Type $eventTypeId",
+                            title = eventType?.name ?: "Type $eventTypeId",
                             isSelected = selectedEventTypes.contains(eventTypeId.toString()),
                             color = when (eventTypeId) {
                                 1 -> Color(0xFF2196F3) // Blue - Meeting

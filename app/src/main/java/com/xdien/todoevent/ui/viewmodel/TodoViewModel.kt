@@ -5,6 +5,7 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.xdien.todoevent.domain.model.Event
+import com.xdien.todoevent.domain.model.EventType
 import com.xdien.todoevent.domain.repository.EventRepository
 import com.xdien.todoevent.ui.components.toChipItems
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -44,8 +45,13 @@ class TodoViewModel @Inject constructor(
     private val _chipItems = MutableStateFlow<List<com.xdien.todoevent.ui.components.ChipItem>>(emptyList())
     val chipItems: StateFlow<List<com.xdien.todoevent.ui.components.ChipItem>> = _chipItems.asStateFlow()
     
+    // For event types
+    private val _eventTypes = MutableStateFlow<List<EventType>>(emptyList())
+    val eventTypes: StateFlow<List<EventType>> = _eventTypes.asStateFlow()
+    
     init {
         loadEvents()
+        loadEventTypes()
         // Initialize chip items
         updateChipItems()
     }
@@ -67,6 +73,21 @@ class TodoViewModel @Inject constructor(
             } finally {
                 _isLoading.value = false
                 _isLoadingLiveData.value = false
+            }
+        }
+    }
+    
+    fun loadEventTypes() {
+        viewModelScope.launch {
+            try {
+                val result = eventRepository.getEventTypes()
+                result.onSuccess { types ->
+                    _eventTypes.value = types
+                }.onFailure { error ->
+                    android.util.Log.e("TodoViewModel", "Failed to load event types: ${error.message}")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("TodoViewModel", "Exception loading event types", e)
             }
         }
     }
@@ -191,5 +212,10 @@ class TodoViewModel @Inject constructor(
     fun clearChipSelection() {
         _selectedChipIds.value = emptySet()
         updateChipItems()
+    }
+    
+    // Get event type name by ID
+    fun getEventTypeName(eventTypeId: Int): String {
+        return _eventTypes.value.find { it.id == eventTypeId }?.name ?: "Type $eventTypeId"
     }
 } 

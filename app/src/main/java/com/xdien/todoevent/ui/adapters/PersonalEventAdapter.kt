@@ -66,7 +66,8 @@ class PersonalEventAdapter(
 @Composable
 fun EventCard(
     event: Event,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    eventTypeName: String? = null
 ) {
     Card(
         modifier = Modifier
@@ -113,6 +114,21 @@ fun EventCard(
                     ),
                     maxLines = 2
                 )
+                
+                // Event Type Badge
+                Card(
+                    modifier = Modifier.wrapContentWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                ) {
+                    Text(
+                        text = eventTypeName ?: "Type ${event.eventTypeId}",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
                 
                 // Time and location
                 Column(

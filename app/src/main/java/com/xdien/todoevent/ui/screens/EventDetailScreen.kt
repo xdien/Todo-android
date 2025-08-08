@@ -40,6 +40,7 @@ fun EventDetailScreen(
 ) {
     val context = LocalContext.current
     var event by remember { mutableStateOf<Event?>(null) }
+    val eventTypes by viewModel.eventTypes.collectAsState()
     
     LaunchedEffect(eventId) {
         viewModel.getEventById(eventId.toInt()).collect { eventData ->
@@ -63,7 +64,7 @@ fun EventDetailScreen(
                     // Share button
                     IconButton(
                         onClick = {
-                            event?.let { shareEvent(context, it) }
+                            event?.let { shareEvent(context, it, eventTypes) }
                         }
                     ) {
                         Icon(Icons.Default.Share, contentDescription = "Chia sẻ")
@@ -111,6 +112,7 @@ fun EventDetailScreen(
                 // Event Details
                 EventDetails(
                     event = event,
+                    eventTypes = eventTypes,
                     modifier = Modifier.padding(16.dp)
                 )
             }
@@ -134,9 +136,9 @@ fun EventDetailScreen(
             title = { Text("Xác nhận xóa") },
             text = { Text("Bạn có chắc chắn muốn xóa sự kiện này không?") },
             confirmButton = {
-                                    TextButton(
-                        onClick = {
-                            event?.let { viewModel.deleteEvent(it.id) }
+                TextButton(
+                    onClick = {
+                        event?.let { viewModel.deleteEvent(it.id) }
                         showDeleteDialog = false
                         onNavigateBack()
                     }
@@ -229,6 +231,7 @@ class ImagePagerAdapter(private val images: List<String>) :
 @Composable
 fun EventDetails(
     event: Event,
+    eventTypes: List<com.xdien.todoevent.domain.model.EventType>,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -249,8 +252,9 @@ fun EventDetails(
                 containerColor = MaterialTheme.colorScheme.primaryContainer
             )
         ) {
+            val eventTypeName = eventTypes.find { it.id == event.eventTypeId }?.name ?: "Type ${event.eventTypeId}"
             Text(
-                text = "Type ID: ${event.eventTypeId}",
+                text = eventTypeName,
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -445,13 +449,14 @@ fun AdditionalInfo(
     }
 }
 
-private fun shareEvent(context: android.content.Context, event: Event) {
+private fun shareEvent(context: android.content.Context, event: Event, eventTypes: List<com.xdien.todoevent.domain.model.EventType>) {
+    val eventTypeName = eventTypes.find { it.id == event.eventTypeId }?.name ?: "Type ${event.eventTypeId}"
     val shareText = buildString {
         appendLine("Sự kiện: ${event.title}")
         appendLine("Mô tả: ${event.description}")
         appendLine("Thời gian: ${event.startDate}")
         appendLine("Địa điểm: ${event.location}")
-        appendLine("Loại sự kiện ID: ${event.eventTypeId}")
+        appendLine("Loại sự kiện: $eventTypeName")
     }
     
     val sendIntent = android.content.Intent().apply {
