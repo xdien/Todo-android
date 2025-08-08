@@ -40,10 +40,10 @@ abstract class TodoDatabase : RoomDatabase() {
     companion object {
         // Migration from version 4 to version 1
         val MIGRATION_4_1 = object : Migration(4, 1) {
-            override fun migrate(database: SupportSQLiteDatabase) {
+            override fun migrate(db: SupportSQLiteDatabase) {
                 // Drop all tables and recreate them
-                database.execSQL("DROP TABLE IF EXISTS event_type")
-                database.execSQL("""
+                db.execSQL("DROP TABLE IF EXISTS event_type")
+                db.execSQL("""
                     CREATE TABLE event_type (
                         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                         name TEXT NOT NULL
@@ -51,11 +51,11 @@ abstract class TodoDatabase : RoomDatabase() {
                 """)
                 
                 // Recreate default data
-                database.execSQL("INSERT INTO event_type (name) VALUES ('Meeting')")
-                database.execSQL("INSERT INTO event_type (name) VALUES ('Party')")
-                database.execSQL("INSERT INTO event_type (name) VALUES ('Conference')")
-                database.execSQL("INSERT INTO event_type (name) VALUES ('Personal')")
-                database.execSQL("INSERT INTO event_type (name) VALUES ('Work')")
+                db.execSQL("INSERT INTO event_type (name) VALUES ('Meeting')")
+                db.execSQL("INSERT INTO event_type (name) VALUES ('Party')")
+                db.execSQL("INSERT INTO event_type (name) VALUES ('Conference')")
+                db.execSQL("INSERT INTO event_type (name) VALUES ('Personal')")
+                db.execSQL("INSERT INTO event_type (name) VALUES ('Work')")
             }
         }
         
