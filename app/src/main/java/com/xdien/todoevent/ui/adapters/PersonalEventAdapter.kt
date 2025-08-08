@@ -11,6 +11,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.recyclerview.widget.DiffUtil
@@ -114,7 +115,8 @@ fun EventCard(
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp
                     ),
-                    maxLines = 2
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 
                 // Event Type Badge - Hidden as requested
@@ -142,7 +144,9 @@ fun EventCard(
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 fontSize = 14.sp
                             ),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                     
@@ -153,7 +157,8 @@ fun EventCard(
                                 fontSize = 14.sp
                             ),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
