@@ -7,6 +7,8 @@ import com.xdien.todoevent.domain.usecase.UpdateEventUseCase
 import com.xdien.todoevent.domain.usecase.GetEventTypesUseCase
 import com.xdien.todoevent.domain.usecase.LoadEventsUseCase
 import com.xdien.todoevent.domain.usecase.RequestCameraPermissionUseCase
+import com.xdien.todoevent.domain.usecase.SyncEventsUseCase
+import com.xdien.todoevent.domain.usecase.RefreshEventsUseCase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -69,5 +71,22 @@ object UseCaseModule {
     @Singleton
     fun provideRequestCameraPermissionUseCase(): RequestCameraPermissionUseCase {
         return RequestCameraPermissionUseCase()
+    }
+    
+    @Provides
+    @Singleton
+    fun provideSyncEventsUseCase(
+        eventRepository: com.xdien.todoevent.domain.repository.EventRepository
+    ): SyncEventsUseCase {
+        return SyncEventsUseCase(eventRepository)
+    }
+    
+    @Provides
+    @Singleton
+    fun provideRefreshEventsUseCase(
+        eventRepository: com.xdien.todoevent.domain.repository.EventRepository,
+        syncEventsUseCase: SyncEventsUseCase
+    ): RefreshEventsUseCase {
+        return RefreshEventsUseCase(eventRepository, syncEventsUseCase)
     }
 }

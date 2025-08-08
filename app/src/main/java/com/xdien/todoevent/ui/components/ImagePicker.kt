@@ -158,10 +158,10 @@ fun ImagePicker(
     }
     
     // Photo picker launcher for selecting multiple images (when 2 or more slots remain)
-    // Use a fixed maxItems to avoid the crash issue
+    // Use remainingSlots to limit the selection based on current selected images
     val multiplePhotoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickMultipleVisualMedia(
-            maxItems = 5  // Use fixed value, we'll limit the selection in the callback
+            maxItems = if (remainingSlots >= 2) remainingSlots else 2  // Ensure maxItems >= 2
         )
     ) { uris ->
         android.util.Log.d("ImagePicker", "Multiple photo picker result - selected: ${uris.size}, remaining slots: $remainingSlots")
@@ -465,7 +465,7 @@ fun ImagePicker(
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
-                        text = "Đã chọn ${selectedImages.size}/$maxItems hình ảnh",
+                        text = "Đã chọn ${selectedImages.size}/$maxItems hình ảnh (còn lại $remainingSlots)",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
@@ -570,7 +570,7 @@ fun ImagePicker(
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(if (remainingSlots == 1) "Chọn ảnh" else "Chọn nhiều ảnh")
+                        Text(if (remainingSlots == 1) "Chọn ảnh" else "Chọn nhiều ảnh ($remainingSlots)")
                     }
                 }
             },

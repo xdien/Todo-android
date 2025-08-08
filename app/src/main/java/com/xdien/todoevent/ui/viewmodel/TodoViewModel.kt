@@ -13,6 +13,9 @@ import com.xdien.todoevent.domain.usecase.GetEventTypesUseCase
 import com.xdien.todoevent.domain.usecase.LoadEventsUseCase
 import com.xdien.todoevent.domain.usecase.LoadEventsInput
 import com.xdien.todoevent.domain.usecase.LoadEventsResult
+import com.xdien.todoevent.domain.usecase.RefreshEventsUseCase
+import com.xdien.todoevent.domain.usecase.RefreshEventsInput
+import com.xdien.todoevent.domain.usecase.RefreshEventsResult
 import com.xdien.todoevent.ui.components.toChipItems
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,7 +34,8 @@ class TodoViewModel @Inject constructor(
     private val eventBus: EventBus,
     private val getEventByIdUseCase: GetEventByIdUseCase,
     private val getEventTypesUseCase: GetEventTypesUseCase,
-    private val loadEventsUseCase: LoadEventsUseCase
+    private val loadEventsUseCase: LoadEventsUseCase,
+    private val refreshEventsUseCase: RefreshEventsUseCase
 ) : ViewModel() {
     
     private val _events = MutableStateFlow<List<Event>>(emptyList())
@@ -332,27 +336,75 @@ class TodoViewModel @Inject constructor(
     }
     
     /**
-     * Refresh events - this method is called for pull-to-refresh
+     * Refresh events with synchronization - this method is called for pull-to-refresh
      */
     fun refreshEvents() {
         viewModelScope.launch {
             _isLoading.value = true
             
-            val input = LoadEventsInput(null, null)
-            loadEventsUseCase.execute(input).collect { result ->
+            val input = RefreshEventsInput(
+                keyword = null,
+                typeId = null,
+                allowLocalDeletion = false // Don't delete local events during refresh
+            )
+            
+            refreshEventsUseCase.execute(input).collect { result ->
                 when (result) {
-                    is LoadEventsResult.Success -> {
+                    is RefreshEventsResult.Success -> {
                         _events.value = result.events
+                        
+                        // Log sync information
+                        android.util.Log.d("TodoViewModel", "Refresh completed with sync info: " +
+                            "Added: ${result.syncInfo.addedCount}, " +
+                            "Updated: ${result.syncInfo.updatedCount}, " +
+                            "Deleted: ${result.syncInfo.deletedCount}, " +
+                            "Total: ${result.syncInfo.totalEvents}")
+                        
                         // Broadcast events refreshed
                         eventBus.broadcastEventsRefreshed()
                     }
-                    is LoadEventsResult.NotFoundError -> {
-                        android.util.Log.e("TodoViewModel", "404 Error refreshing events: ${result.message}")
-                        _isNotFoundError.value = true
+                    is RefreshEventsResult.Error -> {
+                        android.util.Log.e("TodoViewModel", "Error refreshing events: ${result.message}")
+                        _isNotFoundError.value = false
                         _events.value = emptyList()
                     }
-                    is LoadEventsResult.Error -> {
-                        android.util.Log.e("TodoViewModel", "Error refreshing events: ${result.message}")
+                }
+            }
+            
+            _isLoading.value = false
+        }
+    }
+    
+    /**
+     * Full synchronization with local deletion - this method performs complete sync
+     */
+    fun syncEvents(allowLocalDeletion: Boolean = false) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            
+            val input = RefreshEventsInput(
+                keyword = null,
+                typeId = null,
+                allowLocalDeletion = allowLocalDeletion
+            )
+            
+            refreshEventsUseCase.execute(input).collect { result ->
+                when (result) {
+                    is RefreshEventsResult.Success -> {
+                        _events.value = result.events
+                        
+                        // Log sync information
+                        android.util.Log.d("TodoViewModel", "Full sync completed with sync info: " +
+                            "Added: ${result.syncInfo.addedCount}, " +
+                            "Updated: ${result.syncInfo.updatedCount}, " +
+                            "Deleted: ${result.syncInfo.deletedCount}, " +
+                            "Total: ${result.syncInfo.totalEvents}")
+                        
+                        // Broadcast events refreshed
+                        eventBus.broadcastEventsRefreshed()
+                    }
+                    is RefreshEventsResult.Error -> {
+                        android.util.Log.e("TodoViewModel", "Error syncing events: ${result.message}")
                         _isNotFoundError.value = false
                         _events.value = emptyList()
                     }
