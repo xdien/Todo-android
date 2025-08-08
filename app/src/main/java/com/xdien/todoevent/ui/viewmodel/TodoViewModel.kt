@@ -4,6 +4,7 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.xdien.todoevent.common.EventBus
 import com.xdien.todoevent.domain.model.Event
 import com.xdien.todoevent.domain.model.EventType
 import com.xdien.todoevent.domain.repository.EventRepository
@@ -18,7 +19,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class TodoViewModel @Inject constructor(
-    private val eventRepository: EventRepository
+    private val eventRepository: EventRepository,
+    private val eventBus: EventBus
 ) : ViewModel() {
     
     private val _events = MutableStateFlow<List<Event>>(emptyList())
@@ -54,6 +56,37 @@ class TodoViewModel @Inject constructor(
         loadEventTypes()
         // Initialize chip items
         updateChipItems()
+        
+        // Listen to event changes from EventBus
+        listenToEventChanges()
+    }
+    
+    /**
+     * Listen to event changes from EventBus and refresh events accordingly
+     */
+    private fun listenToEventChanges() {
+        viewModelScope.launch {
+            eventBus.eventChanges.collect { eventChange ->
+                when (eventChange) {
+                    is EventBus.EventChange.EventCreated -> {
+                        android.util.Log.d("TodoViewModel", "Event created, refreshing events")
+                        loadEvents()
+                    }
+                    is EventBus.EventChange.EventUpdated -> {
+                        android.util.Log.d("TodoViewModel", "Event updated, refreshing events")
+                        loadEvents()
+                    }
+                    is EventBus.EventChange.EventDeleted -> {
+                        android.util.Log.d("TodoViewModel", "Event deleted, refreshing events")
+                        loadEvents()
+                    }
+                    is EventBus.EventChange.EventsRefreshed -> {
+                        android.util.Log.d("TodoViewModel", "Events refreshed, refreshing events")
+                        loadEvents()
+                    }
+                }
+            }
+        }
     }
     
     fun loadEvents() {
@@ -70,6 +103,10 @@ class TodoViewModel @Inject constructor(
                     _events.value = eventList
                     _eventsLiveData.value = eventList
                 }
+            } catch (e: Exception) {
+                android.util.Log.e("TodoViewModel", "Error loading events", e)
+                _events.value = emptyList()
+                _eventsLiveData.value = emptyList()
             } finally {
                 _isLoading.value = false
                 _isLoadingLiveData.value = false
@@ -107,8 +144,8 @@ class TodoViewModel @Inject constructor(
                     images = emptyList()
                 )
                 eventRepository.createEvent(event)
-                // Reload events after creation
-                loadEvents()
+                // Broadcast event created
+                eventBus.broadcastEventCreated()
             } catch (e: Exception) {
                 // Handle error
             }
@@ -120,8 +157,8 @@ class TodoViewModel @Inject constructor(
             try {
                 val result = eventRepository.updateEvent(id, title, description, typeId, startDate, location)
                 if (result.isSuccess) {
-                    // Reload events after update
-                    loadEvents()
+                    // Broadcast event updated
+                    eventBus.broadcastEventUpdated()
                 }
             } catch (e: Exception) {
                 // Handle error
@@ -132,11 +169,25 @@ class TodoViewModel @Inject constructor(
     fun deleteEvent(id: Int) {
         viewModelScope.launch {
             try {
+                android.util.Log.d("TodoViewModel", "Deleting event with ID: $id")
                 eventRepository.deleteEvent(id)
-                // Reload events after deletion
-                loadEvents()
+                
+                // Update events list by removing the deleted event immediately
+                val currentEvents = _events.value.toMutableList()
+                val removedEvent = currentEvents.find { it.id == id }
+                if (removedEvent != null) {
+                    currentEvents.removeAll { it.id == id }
+                    _events.value = currentEvents
+                    _eventsLiveData.value = currentEvents
+                    android.util.Log.d("TodoViewModel", "Event deleted successfully. Remaining events: ${currentEvents.size}")
+                } else {
+                    android.util.Log.w("TodoViewModel", "Event with ID $id not found in current list")
+                }
+                
+                // Broadcast event deleted
+                eventBus.broadcastEventDeleted()
             } catch (e: Exception) {
-                // Handle error
+                android.util.Log.e("TodoViewModel", "Error deleting event", e)
             }
         }
     }
@@ -167,6 +218,8 @@ class TodoViewModel @Inject constructor(
                     _events.value = eventList
                     _eventsLiveData.value = eventList
                 }
+                // Broadcast events refreshed
+                eventBus.broadcastEventsRefreshed()
             } finally {
                 _isLoading.value = false
             }

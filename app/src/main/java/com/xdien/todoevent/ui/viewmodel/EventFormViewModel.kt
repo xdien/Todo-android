@@ -3,6 +3,7 @@ package com.xdien.todoevent.ui.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.xdien.todoevent.common.EventBus
 import com.xdien.todoevent.domain.model.Event
 import com.xdien.todoevent.domain.model.EventType
 import com.xdien.todoevent.domain.usecase.CreateEventUseCase
@@ -31,7 +32,8 @@ class EventFormViewModel @Inject constructor(
     private val uploadEventImagesUseCase: UploadImagesInBackgroundUseCase,
     private val updateEventUseCase: UpdateEventUseCase,
     private val getEventByIdUseCase: GetEventByIdUseCase,
-    private val eventRepository: EventRepository
+    private val eventRepository: EventRepository,
+    private val eventBus: EventBus
 ) : ViewModel() {
     val TAG = "EventFormViewModel"
 
@@ -181,8 +183,6 @@ class EventFormViewModel @Inject constructor(
         }
     }
 
-
-
     /**
      * Remove image from selection
      */
@@ -242,6 +242,10 @@ class EventFormViewModel @Inject constructor(
                                 isSuccess = true,
                                 error = null
                             )
+                            // Broadcast event updated
+                            viewModelScope.launch {
+                                eventBus.broadcastEventUpdated()
+                            }
                         }.onFailure { error ->
                             // Don't save to local DB if API update fails
                             _uiState.value = currentState.copy(
@@ -268,7 +272,6 @@ class EventFormViewModel @Inject constructor(
                         
                         // Now upload images if any
                         if (_selectedImages.value.isNotEmpty()) {
-
                             Log.d(TAG, "createEventResult: ${event.id}")
                             uploadImagesToEvent(event.id)
                         } else {
@@ -278,6 +281,10 @@ class EventFormViewModel @Inject constructor(
                                 isSuccess = true,
                                 error = null
                             )
+                            // Broadcast event created
+                            viewModelScope.launch {
+                                eventBus.broadcastEventCreated()
+                            }
                         }
                     }.onFailure { error ->
                         _uiState.value = currentState.copy(
@@ -401,6 +408,11 @@ class EventFormViewModel @Inject constructor(
                 clearImages()
                 _uploadProgress.value = null
                 Log.d("EventFormViewModel", "Upload process completed successfully")
+                
+                // Broadcast event created after successful upload
+                viewModelScope.launch {
+                    eventBus.broadcastEventCreated()
+                }
             },
             onError = { error ->
                 Log.e("EventFormViewModel", "Upload error occurred", error)
@@ -413,8 +425,6 @@ class EventFormViewModel @Inject constructor(
             }
         )
     }
-    
-
     
     override fun onCleared() {
         super.onCleared()

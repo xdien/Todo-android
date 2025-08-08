@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Settings
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.xdien.todoevent.common.NetworkManager
 import com.xdien.todoevent.common.SharedPreferencesHelper
 
@@ -48,8 +49,8 @@ class PersonalEventComposeActivity : ComponentActivity() {
         setContent {
             TodoEventTheme {
                 val viewModel: TodoViewModel = hiltViewModel()
-                val events by viewModel.events.collectAsState()
-                val eventTypes by viewModel.eventTypes.collectAsState()
+                val events by viewModel.events.collectAsStateWithLifecycle()
+                val eventTypes by viewModel.eventTypes.collectAsStateWithLifecycle()
                 
                 // Search state
                 var searchQuery by rememberSaveable { mutableStateOf("") }

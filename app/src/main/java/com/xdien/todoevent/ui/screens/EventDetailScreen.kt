@@ -40,7 +40,7 @@ fun EventDetailScreen(
 ) {
     val context = LocalContext.current
     var event by remember { mutableStateOf<Event?>(null) }
-    val eventTypes by viewModel.eventTypes.collectAsState()
+    val eventTypes by viewModel.eventTypes.collectAsStateWithLifecycle()
     
     LaunchedEffect(eventId) {
         viewModel.getEventById(eventId.toInt()).collect { eventData ->
@@ -48,8 +48,6 @@ fun EventDetailScreen(
         }
     }
     var showDeleteDialog by remember { mutableStateOf(false) }
-    
-
     
     Scaffold(
         topBar = {
@@ -138,9 +136,12 @@ fun EventDetailScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        event?.let { viewModel.deleteEvent(it.id) }
+                        event?.let { 
+                            viewModel.deleteEvent(it.id)
+                            // Navigate back immediately after deletion
+                            onNavigateBack()
+                        }
                         showDeleteDialog = false
-                        onNavigateBack()
                     }
                 ) {
                     Text("Xóa", color = MaterialTheme.colorScheme.error)
