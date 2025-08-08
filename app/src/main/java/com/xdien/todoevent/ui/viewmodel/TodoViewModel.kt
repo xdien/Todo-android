@@ -49,13 +49,6 @@ class TodoViewModel @Inject constructor(
     // Search job for debouncing
     private var searchJob: Job? = null
     
-    // LiveData for Fragment approach
-    private val _eventsLiveData = MutableLiveData<List<Event>>()
-    val eventsLiveData: LiveData<List<Event>> = _eventsLiveData
-    
-    private val _isLoadingLiveData = MutableLiveData<Boolean>()
-    val isLoadingLiveData: LiveData<Boolean> = _isLoadingLiveData
-    
     // For event detail screen
     private val _selectedEvent = MutableStateFlow<Event?>(null)
     val selectedEvent: StateFlow<Event?> = _selectedEvent.asStateFlow()
@@ -123,7 +116,6 @@ class TodoViewModel @Inject constructor(
     fun loadEvents() {
         viewModelScope.launch {
             _isLoading.value = true
-            _isLoadingLiveData.value = true
             _isNotFoundError.value = false
             try {
                 // Fetch events from API
@@ -133,7 +125,6 @@ class TodoViewModel @Inject constructor(
                         android.util.Log.d("TodoViewModel", "Event: ${event.title} (ID: ${event.id})")
                     }
                     _events.value = eventList
-                    _eventsLiveData.value = eventList
                 }
             } catch (e: Exception) {
                 android.util.Log.e("TodoViewModel", "Error loading events", e)
@@ -147,10 +138,8 @@ class TodoViewModel @Inject constructor(
                 }
                 
                 _events.value = emptyList()
-                _eventsLiveData.value = emptyList()
             } finally {
                 _isLoading.value = false
-                _isLoadingLiveData.value = false
             }
         }
     }
@@ -230,17 +219,6 @@ class TodoViewModel @Inject constructor(
         searchJob?.cancel()
     }
     
-    /**
-     * Get current events to display (search results if searching, otherwise all events)
-     */
-    fun getDisplayEvents(): List<Event> {
-        return if (_searchQuery.value.isNotEmpty()) {
-            _searchResults.value
-        } else {
-            _events.value
-        }
-    }
-    
     fun loadEventTypes() {
         viewModelScope.launch {
             try {
@@ -252,43 +230,6 @@ class TodoViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 android.util.Log.e("TodoViewModel", "Exception loading event types", e)
-            }
-        }
-    }
-    
-    fun createEvent(title: String, description: String, eventTypeId: Int, startDate: String, location: String) {
-        viewModelScope.launch {
-            try {
-                val event = Event(
-                    id = 0, // Will be set by server
-                    title = title,
-                    description = description,
-                    eventTypeId = eventTypeId,
-                    startDate = startDate,
-                    location = location,
-                    createdAt = "",
-                    updatedAt = "",
-                    images = emptyList()
-                )
-                eventRepository.createEvent(event)
-                // Broadcast event created
-                eventBus.broadcastEventCreated()
-            } catch (e: Exception) {
-                // Handle error
-            }
-        }
-    }
-    
-    fun updateEvent(id: Int, title: String, description: String, typeId: Int, startDate: String, location: String) {
-        viewModelScope.launch {
-            try {
-                val result = eventRepository.updateEvent(id, title, description, typeId, startDate, location)
-                if (result.isSuccess) {
-                    // Broadcast event updated
-                    eventBus.broadcastEventUpdated()
-                }
-            } catch (e: Exception) {
-                // Handle error
             }
         }
     }
@@ -305,7 +246,6 @@ class TodoViewModel @Inject constructor(
                 if (removedEvent != null) {
                     currentEvents.removeAll { it.id == id }
                     _events.value = currentEvents
-                    _eventsLiveData.value = currentEvents
                     android.util.Log.d("TodoViewModel", "Event deleted successfully. Remaining events: ${currentEvents.size}")
                 } else {
                     android.util.Log.w("TodoViewModel", "Event with ID $id not found in current list")
@@ -323,30 +263,6 @@ class TodoViewModel @Inject constructor(
                 eventBus.broadcastEventDeleted()
             } catch (e: Exception) {
                 android.util.Log.e("TodoViewModel", "Error deleting event", e)
-            }
-        }
-    }
-    
-    // Get event by ID for detail screen using use case
-    suspend fun getEventById(id: Int): Flow<Event?> {
-        return flow {
-            try {
-                _isEventLoading.value = true
-                _eventError.value = null
-                
-                val result = getEventByIdUseCase(id)
-                if (result.isSuccess) {
-                    emit(result.getOrNull())
-                } else {
-                    val error = result.exceptionOrNull()
-                    _eventError.value = error?.message ?: "Unknown error occurred"
-                    emit(null)
-                }
-            } catch (e: Exception) {
-                _eventError.value = e.message ?: "Unknown error occurred"
-                emit(null)
-            } finally {
-                _isEventLoading.value = false
             }
         }
     }
@@ -390,7 +306,6 @@ class TodoViewModel @Inject constructor(
                 // Fetch fresh data from API
                 eventRepository.getEvents(null, null).collect { eventList ->
                     _events.value = eventList
-                    _eventsLiveData.value = eventList
                 }
                 // Broadcast events refreshed
                 eventBus.broadcastEventsRefreshed()
@@ -409,43 +324,6 @@ class TodoViewModel @Inject constructor(
             }
         }
     }
-    
-    // Handle chip selection
-    fun selectChip(chipId: String, singleSelection: Boolean = true) {
-        val id = chipId.toLongOrNull() ?: return
-        
-        if (singleSelection) {
-            _selectedChipIds.value = setOf(id)
-        } else {
-            val currentSelected = _selectedChipIds.value.toMutableSet()
-            if (currentSelected.contains(id)) {
-                currentSelected.remove(id)
-            } else {
-                currentSelected.add(id)
-            }
-            _selectedChipIds.value = currentSelected
-        }
-        
-        // Update chip items with new selection
-        updateChipItems()
-    }
-    
-    // Get selected events
-    fun getSelectedEvents(): List<Event> {
-        return events.value.filter { it.id.toLong() in _selectedChipIds.value }
-    }
-    
-    // Clear all selections
-    fun clearChipSelection() {
-        _selectedChipIds.value = emptySet()
-        updateChipItems()
-    }
-    
-    // Get event type name by ID
-    fun getEventTypeName(eventTypeId: Int): String {
-        return _eventTypes.value.find { it.id == eventTypeId }?.name ?: "Type $eventTypeId"
-    }
-    
     /**
      * Get EventBus instance for external access
      */
