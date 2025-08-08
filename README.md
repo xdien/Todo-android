@@ -9,7 +9,6 @@ TodoEvent là ứng dụng mobile giúp người dùng quản lý các sự ki�
 - ✅ **Quản lý sự kiện**: Thêm, sửa, xóa sự kiện
 - ✅ **Tìm kiếm & Lọc**: Tìm kiếm theo tiêu đề, lọc theo loại sự kiện
 - ✅ **Lưu trữ offline**: Hoạt động ngay cả khi không có mạng
-- ✅ **Đồng bộ dữ liệu**: Tự động đồng bộ khi có kết nối mạng
 - ✅ **Upload hình ảnh**: Hỗ trợ tối đa 5 hình ảnh cho mỗi sự kiện
 - ✅ **Giao diện hiện đại**: Sử dụng Material Design 3
 
@@ -23,20 +22,19 @@ TodoEvent là ứng dụng mobile giúp người dùng quản lý các sự ki�
 - **Dependency Injection**: Hilt
 - **Networking**: Retrofit + OkHttp
 - **Image Loading**: Coil
-- **Testing**: JUnit, Espresso, Compose Testing
 - **Annotation Processing**: KSP (Kotlin Symbol Processing)
 
 ### Backend (Mock)
-- **API**: RESTful API với Retrofit
-- **Mock Server**: Local JSON storage
-- **Authentication**: Bearer Token (mock)
+- **API**: RESTful API by fastapi
+- **Mock Server**: Local database (SQLite)
 
 ## 📋 Yêu cầu hệ thống
-
-- **Android**: API Level 24+ (Android 7.0+)
+- **Android Studio**: 2025.1.1 Patch 1
+- **Android**: API Level 28+ (Android 9.0+)
 - **Kotlin**: 2.0.21+
 - **Gradle**: 8.11.1+
 - **JDK**: 11+
+- **Python**: 3.12
 
 ## 🔧 Cài đặt và Chạy
 
@@ -64,29 +62,6 @@ sdk.dir=/path/to/your/android/sdk
 ./gradlew installDebug
 
 # Hoặc mở project trong Android Studio và nhấn Run
-```
-
-## 📁 Cấu trúc dự án
-
-```
-todoevent/
-├── app/
-│   ├── src/
-│   │   ├── main/
-│   │   │   ├── java/com/xdien/todoevent/
-│   │   │   │   ├── common/         # Common classes (UseCase base)
-│   │   │   │   ├── data/           # Data layer (Repository, API, Database)
-│   │   │   │   ├── domain/         # Domain layer (UseCases, Entities)
-│   │   │   │   ├── presentation/   # UI layer (Screens, ViewModels)
-│   │   │   │   └── utils/          # Utilities
-│   │   │   └── res/                # Resources
-│   │   └── test/                   # Unit tests
-│   └── build.gradle.kts
-├── gradle/
-├── build.gradle.kts
-├── FEATURE_DEVELOPMENT_GUIDE.md    # Hướng dẫn phát triển tính năng
-├── CLEAN_ARCHITECTURE_GUIDE.md     # Hướng dẫn Clean Architecture
-└── README.md
 ```
 
 ### Clean Architecture Layers
@@ -123,55 +98,6 @@ todoevent/
 - `q` - Tìm kiếm theo tiêu đề
 - `typeId` - Lọc theo loại sự kiện
 
-## 🗄 Database Schema
-
-### Events Table
-```sql
-CREATE TABLE events (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL,
-    dateTime TEXT NOT NULL,
-    location TEXT NOT NULL,
-    typeId TEXT NOT NULL,
-    images TEXT, -- JSON array
-    createdAt TEXT NOT NULL,
-    updatedAt TEXT NOT NULL,
-    isSynced INTEGER DEFAULT 0
-);
-```
-
-### Event Types Table
-```sql
-CREATE TABLE event_types (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    color TEXT NOT NULL
-);
-```
-
-## 🧪 Testing
-
-### Unit Tests
-```bash
-# Chạy tất cả unit tests
-./gradlew test
-
-# Chạy tests cho module cụ thể
-./gradlew app:test
-```
-
-### Instrumented Tests
-```bash
-# Chạy instrumented tests
-./gradlew connectedAndroidTest
-```
-
-### UI Tests
-```bash
-# Chạy Compose UI tests
-./gradlew app:testDebugUnitTest
-```
 
 ## 📱 Hướng dẫn sử dụng
 
@@ -199,167 +125,33 @@ CREATE TABLE event_types (
 ## 🔄 Offline Mode
 
 ### Cách hoạt động
-1. **Khi có mạng**: Dữ liệu được đồng bộ với server
+1. **Khi có mạng**: Dữ liệu được đồng bộ với server bằng cách kéo xuống để refresh
 2. **Khi mất mạng**: Ứng dụng sử dụng dữ liệu cache
-3. **Khi có mạng trở lại**: Tự động đồng bộ dữ liệu chưa sync
 
 ### Dữ liệu được cache
 - Danh sách sự kiện
 - Chi tiết sự kiện
 - Loại sự kiện
-- Hình ảnh (LRU cache)
 
-## 🚀 Build & Deploy
-
-### Debug Build
-```bash
-./gradlew assembleDebug
-```
-
-### Release Build
-```bash
-# Tạo keystore (chỉ lần đầu)
-keytool -genkey -v -keystore todoevent.keystore -alias todoevent -keyalg RSA -keysize 2048 -validity 10000
-
-# Build release
-./gradlew assembleRelease
-```
-
-### Signing Configuration
-Thêm vào `app/build.gradle.kts`:
-```kotlin
-android {
-    signingConfigs {
-        create("release") {
-            keyAlias = "todoevent"
-            keyPassword = "your_key_password"
-            storeFile = file("todoevent.keystore")
-            storePassword = "your_store_password"
-        }
-    }
-    
-    buildTypes {
-        release {
-            isMinifyEnabled = true
-            signingConfig = signingConfigs.getByName("release")
-        }
-    }
-}
-```
-
-## 📊 Performance
 
 ### Optimization Techniques
-- **Image Caching**: LRU cache cho hình ảnh
 - **Database Indexing**: Index trên các trường tìm kiếm
-- **Pagination**: Load dữ liệu theo trang
-- **Background Sync**: WorkManager cho đồng bộ
 - **Memory Management**: Proper lifecycle management
 
-### Metrics
-- **App Size**: ~15MB (debug), ~8MB (release)
-- **Startup Time**: <2s
-- **Memory Usage**: <100MB
-- **Battery Impact**: Minimal
-
-## 🐛 Troubleshooting
-
-### Lỗi thường gặp
-
-#### 1. Build failed
-```bash
-# Clean và rebuild
-./gradlew clean
-./gradlew build
-```
-
-#### 2. Gradle sync failed
-```bash
-# Invalidate caches trong Android Studio
-File -> Invalidate Caches and Restart
-```
-
-#### 3. Device not detected
-```bash
-# Kiểm tra ADB
-adb devices
-
-# Restart ADB
-adb kill-server
-adb start-server
-```
-
-#### 4. Network issues
-- Kiểm tra kết nối mạng
-- Kiểm tra firewall settings
-- Thử chế độ offline
-
-## 🤝 Contributing
-
-### Quy trình đóng góp
-1. Fork repository
-2. Tạo feature branch: `git checkout -b feature/new-feature`
-3. Commit changes: `git commit -am 'Add new feature'`
-4. Push to branch: `git push origin feature/new-feature`
-5. Tạo Pull Request
-
-### Coding Standards
-- Sử dụng Kotlin coding conventions
-- Tuân thủ Clean Architecture với UseCase pattern
-- Tất cả UseCases phải kế thừa từ `UseCase<Input, Output>`
-- Viết unit tests cho business logic
-- Viết UI tests cho critical flows
-- Document code với KDoc
-- Follow Material Design guidelines
-- Sử dụng KSP thay vì kapt cho annotation processing
-
-## 📄 License
-
-```
-MIT License
-
-Copyright (c) 2024 xdien
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
-
-## 📞 Liên hệ
-
-- **Developer**: xdien
-- **Email**: xdien@example.com
-- **GitHub**: [@xdien](https://github.com/xdien)
-- **Project**: [TodoEvent](https://github.com/xdien/todoevent)
-
-## 🔄 Changelog
-
-### Version 1.0.0 (2024)
-- ✅ Initial release
-- ✅ Clean Architecture implementation
-- ✅ UseCase pattern với base class
-- ✅ Jetpack Compose v2
-- ✅ Basic CRUD operations
-- ✅ Offline support
-- ✅ Image upload
-- ✅ Search and filter
-- ✅ Material Design 3 UI
-- ✅ KSP annotation processing
-
 ---
+## Vấn đề tồn đọng
+- Đối với android dưới 13 thì photo picker không hoạt động như đúng yêu cầu.
+- Vấn đề edit image trong màn hình chi tiết sự kiện, chưa triển khai, vì cần API xóa image để đảm bảo đồng bộ đa thiết bị.
+- Một số case đi từ màn hình search sang màn hình chi tiết có thể cần cải tiến khi người dùng thục hiện xóa sự kiện thì cũng xóa ở màn kết quả search.
+- Cần đổi RecyclerView sang Lazy cho đúng chuẩn jetpack compose. Nhưng do yêu cầu dùng RecyclerView. 
+- Navigation trong android chưa dùng đúng cách, cần sửa lại.
+- Chưa tối ưu tham số để lưu(cache) và hiển thị hìn á đá asd asd sad sadh ảnh có thể chậm lag khi xử lý với số danh sách lớn.
+- Chưa xử lý upload image trong service đặt biệt của android
+- Danh sách RecyclerView có thể cần tối ưu thêm như preloading.
 
-**Lưu ý**: Đây là phiên bản beta. Một số tính năng có thể thay đổi trong các phiên bản tương lai. 
+## Chiến thuật cache
+- So sánh sự khác nhau giữ API và local database (sqlite) để tối ưu performance. tiến hành insert/update/delete cho local database. Resolve conflict ưu tiên thời gian cập nhật cuối gần nhất. 
+
+## Đồng bộ sự kiện trong app 
+- Sử dụng EvenBus
+
