@@ -65,7 +65,6 @@ class EventRepositoryImpl @Inject constructor(
             val apiResponse = eventApiService.getEvents(keyword, typeId)
             
             Log.d("EventRepositoryImpl", "API response success: ${apiResponse.success}")
-            Log.d("EventRepositoryImpl", "API response message: ${apiResponse.message}")
             
             if (apiResponse.success) {
                 Log.d("EventRepositoryImpl", "API data events count: ${apiResponse.data.events.size}")
@@ -297,13 +296,6 @@ private fun EventResponse.toDomain(sharedPreferencesHelper: SharedPreferencesHel
     )
 }
 
-// Extension function to get image URL
-private fun ApiEventImage.getImageUrl(sharedPreferencesHelper: SharedPreferencesHelper): String {
-    val fullUrl = sharedPreferencesHelper.createFullImageUrl(this.filePath) ?: "https://via.placeholder.com/120x120"
-    Log.d("EventRepositoryImpl", "getImageUrl: filePath=${this.filePath}, fullUrl=$fullUrl")
-    return fullUrl
-}
-
 private fun ApiEventImage.toDomain(sharedPreferencesHelper: SharedPreferencesHelper): EventImage {
     val imageUrl = this.getImageUrl(sharedPreferencesHelper)
     Log.d("EventRepositoryImpl", "Mapping ApiEventImage to Domain: id=${this.id}, filePath=${this.filePath}, imageUrl=$imageUrl")
@@ -316,7 +308,7 @@ private fun ApiEventImage.toDomain(sharedPreferencesHelper: SharedPreferencesHel
         filePath = this.filePath ?: "",
         fileSize = this.fileSize ?: 0,
         uploadedAt = this.uploadedAt ?: "",
-        url = imageUrl // Use getImageUrl() method
+        url = imageUrl // Use getImageUrl() method from EventImage class
     )
 }
 

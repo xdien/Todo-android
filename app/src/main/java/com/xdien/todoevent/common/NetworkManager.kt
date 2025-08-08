@@ -1,6 +1,8 @@
 package com.xdien.todoevent.common
 
 
+import com.google.gson.Gson
+import com.google.gson.GsonBuilder
 import com.xdien.todoevent.data.api.EventApiService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import okhttp3.OkHttpClient
@@ -28,10 +30,15 @@ class NetworkManager @Inject constructor(
             .addInterceptor(loggingInterceptor)
             .build()
 
+        // Configure Gson to handle snake_case to camelCase conversion
+        val gson = GsonBuilder()
+            .setFieldNamingPolicy(com.google.gson.FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
+            .create()
+
         return Retrofit.Builder()
             .baseUrl(baseUrl)
             .client(okHttpClient)
-            .addConverterFactory(GsonConverterFactory.create())
+            .addConverterFactory(GsonConverterFactory.create(gson))
             .build()
     }
 

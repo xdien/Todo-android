@@ -227,10 +227,10 @@ def get_event_by_id(event_id: int) -> Optional[Dict[str, Any]]:
         )
         images = [dict(img) for img in images_cursor.fetchall()]
         
-        # Convert to dict and add images
+        # Convert to dict and add images - use snake_case for all response fields
         event_dict = dict(event)
-        # Map type_id to eventTypeId for client consistency
-        event_dict['eventTypeId'] = event_dict.pop('type_id', None)
+        # Map type_id to event_type_id for consistency
+        event_dict['event_type_id'] = event_dict.pop('type_id', None)
         event_dict['images'] = images
         
         logger.debug(f"✅ Found event: {event_dict['title']} with {len(images)} images")
@@ -258,8 +258,8 @@ def get_all_events(keyword: str = None, type_id: int = None) -> List[Dict[str, A
         
         for event_row in cursor.fetchall():
             event = dict(event_row)
-            # Map type_id to eventTypeId for client consistency
-            event['eventTypeId'] = event.pop('type_id', None)
+            # Map type_id to event_type_id for consistency - use snake_case
+            event['event_type_id'] = event.pop('type_id', None)
             # Get images for this event
             images_cursor = conn.execute(
                 "SELECT * FROM images WHERE event_id = ? ORDER BY uploaded_at DESC",
@@ -281,16 +281,27 @@ def create_event(event_data: Dict[str, Any]) -> Dict[str, Any]:
         current_max_id = max_id_result[0] if max_id_result[0] is not None else 0
         logger.info(f"🔍 Current max event ID: {current_max_id}")
         
+        # Handle both camelCase and snake_case field names
+        title = event_data.get('title') or event_data.get('title', '')
+        description = event_data.get('description') or event_data.get('description', '')
+        event_type_id = event_data.get('eventTypeId') or event_data.get('event_type_id')
+        start_date = event_data.get('startDate') or event_data.get('start_date')
+        location = event_data.get('location') or event_data.get('location', '')
+        
+        # Validate required fields
+        if not all([title, description, event_type_id, start_date, location]):
+            raise ValueError("Missing required fields: title, description, eventTypeId, startDate, location")
+        
         # Insert the new event
         cursor = conn.execute('''
             INSERT INTO events (title, description, type_id, start_date, location, created_at)
             VALUES (?, ?, ?, ?, ?, ?)
         ''', (
-            event_data['title'],
-            event_data['description'],
-            event_data['eventTypeId'],
-            event_data['startDate'],
-            event_data['location'],
+            title,
+            description,
+            event_type_id,
+            start_date,
+            location,
             datetime.now().isoformat()
         ))
         
@@ -304,8 +315,6 @@ def create_event(event_data: Dict[str, Any]) -> Dict[str, Any]:
         if not verify_result:
             logger.error(f"❌ CRITICAL: Event with ID {event_id} was not found after creation!")
             raise Exception(f"Event creation failed - ID {event_id} not found in database")
-        
-        logger.info(f"✅ Event verification successful: ID {event_id}, Title: {verify_result[1]}")
         
         # Get the complete event data within the same transaction
         try:
@@ -327,10 +336,10 @@ def create_event(event_data: Dict[str, Any]) -> Dict[str, Any]:
             )
             images = [dict(img) for img in images_cursor.fetchall()]
             
-            # Convert to dict and add images
+            # Convert to dict and add images - use snake_case for response
             event_dict = dict(event)
-            # Map type_id to eventTypeId for client consistency
-            event_dict['eventTypeId'] = event_dict.pop('type_id', None)
+            # Map type_id to event_type_id for consistency
+            event_dict['event_type_id'] = event_dict.pop('type_id', None)
             event_dict['images'] = images
             
             logger.info(f"✅ Event data retrieved successfully: ID {event_id}, Title: {event_dict['title']}")
@@ -343,7 +352,7 @@ def create_event(event_data: Dict[str, Any]) -> Dict[str, Any]:
                 "id": event_id,
                 "title": "Event Created Successfully",
                 "description": "Event was created but data retrieval failed",
-                "eventTypeId": 1,
+                "event_type_id": 1,
                 "start_date": datetime.now().isoformat(),
                 "location": "Unknown",
                 "created_at": datetime.now().isoformat(),
@@ -360,7 +369,7 @@ def update_event(event_id: int, event_data: Dict[str, Any]) -> Optional[Dict[str
             logger.warning(f"⚠️ Event not found for update: {event_id}")
             return None
         
-        # Build update query dynamically
+        # Build update query dynamically - handle both camelCase and snake_case
         update_fields = []
         params = []
         
@@ -368,7 +377,9 @@ def update_event(event_id: int, event_data: Dict[str, Any]) -> Optional[Dict[str
             'title': 'title',
             'description': 'description',
             'eventTypeId': 'type_id',
+            'event_type_id': 'type_id',
             'startDate': 'start_date',
+            'start_date': 'start_date',
             'location': 'location'
         }
         
@@ -463,16 +474,15 @@ def add_event_images(event_id: int, image_files) -> List[Dict[str, Any]]:
                 img_cursor = conn.execute("SELECT * FROM images WHERE id = ?", (image_id,))
                 image_data = dict(img_cursor.fetchone())
                 
-                # Map snake_case to camelCase for client consistency
+                # Return snake_case response for consistency
                 mapped_image = {
                     'id': image_data['id'],
-                    'eventId': image_data['event_id'],
-                    'originalName': image_data['original_name'],
+                    'event_id': image_data['event_id'],
+                    'original_name': image_data['original_name'],
                     'filename': image_data['filename'],
-                    'filePath': image_data['file_path'],
-                    'fileSize': image_data['file_size'],
-                    'uploadedAt': image_data['uploaded_at'],
-                    'url': f"/uploads/{unique_filename}"
+                    'file_path': image_data['file_path'],
+                    'file_size': image_data['file_size'],
+                    'uploaded_at': image_data['uploaded_at']
                 }
                 uploaded_images.append(mapped_image)
                 
@@ -529,9 +539,11 @@ def home():
 def get_events():
     """GET /events - Lấy danh sách sự kiện với tìm kiếm"""
     try:
-        # Get query parameters
+        # Get query parameters - handle both camelCase and snake_case
         keyword = request.args.get('q', '').lower()
-        type_id = request.args.get('eventTypeId', type=int)
+        type_id = request.args.get('typeId') or request.args.get('event_type_id')
+        if type_id:
+            type_id = int(type_id)
         
         logger.info(f"🔍 Getting events with filters - keyword: '{keyword}', type_id: {type_id}")
         
@@ -544,7 +556,7 @@ def get_events():
                 "total": len(filtered_events),
                 "filters": {
                     "keyword": keyword if keyword else None,
-                    "eventTypeId": type_id
+                    "event_type_id": type_id
                 }
             },
             message=f"Lấy danh sách sự kiện thành công. Tìm thấy {len(filtered_events)} sự kiện."
@@ -592,24 +604,36 @@ def create_event_endpoint():
     try:
         data = request.get_json()
         
-        # Validate required fields
-        required_fields = ['title', 'description', 'eventTypeId', 'startDate', 'location']
-        for field in required_fields:
-            if field not in data or not data[field]:
-                logger.warning(f"⚠️ Missing required field: {field}")
-                return create_response(
-                    success=False,
-                    message=f"Thiếu trường bắt buộc: {field}",
-                    status_code=400
-                )
+        # Validate required fields - handle both camelCase and snake_case
+        required_fields_camel = ['title', 'description', 'eventTypeId', 'startDate', 'location']
+        required_fields_snake = ['title', 'description', 'event_type_id', 'start_date', 'location']
         
-        # Validate eventTypeId exists
-        event_types = get_all_event_types()
-        if not any(et['id'] == data['eventTypeId'] for et in event_types):
-            logger.warning(f"⚠️ Invalid eventTypeId: {data['eventTypeId']}")
+        # Check if we have camelCase or snake_case fields
+        has_camel = all(field in data for field in required_fields_camel)
+        has_snake = all(field in data for field in required_fields_snake)
+        
+        if not (has_camel or has_snake):
+            missing_fields = []
+            if not has_camel:
+                missing_fields.extend([f for f in required_fields_camel if f not in data or not data[f]])
+            if not has_snake:
+                missing_fields.extend([f for f in required_fields_snake if f not in data or not data[f]])
+            
+            logger.warning(f"⚠️ Missing required fields: {missing_fields}")
             return create_response(
                 success=False,
-                message="eventTypeId không hợp lệ",
+                message=f"Thiếu trường bắt buộc: {', '.join(missing_fields)}",
+                status_code=400
+            )
+        
+        # Validate event_type_id exists
+        event_types = get_all_event_types()
+        event_type_id = data.get('eventTypeId') or data.get('event_type_id')
+        if not any(et['id'] == event_type_id for et in event_types):
+            logger.warning(f"⚠️ Invalid event_type_id: {event_type_id}")
+            return create_response(
+                success=False,
+                message="event_type_id không hợp lệ",
                 status_code=400
             )
         
@@ -648,28 +672,27 @@ def update_event_endpoint(event_id):
                 status_code=404
             )
         
-        # Determine updated fields
+        # Determine updated fields - handle both camelCase and snake_case
         updated_fields = []
         field_mapping = {
             'title': 'title',
             'description': 'description',
-            'eventTypeId': 'type_id',
+            'eventTypeId': 'event_type_id',
+            'event_type_id': 'event_type_id',
             'startDate': 'start_date',
+            'start_date': 'start_date',
             'location': 'location'
         }
         
         for field in data:
             if field in field_mapping and data[field]:
-                # Map back to client field names for response
-                if field == 'eventTypeId':
-                    updated_fields.append('eventTypeId')
-                else:
-                    updated_fields.append(field)
+                # Map back to snake_case for response
+                updated_fields.append(field_mapping[field])
         
         return create_response(
             data={
                 "event": updated_event,
-                "updatedFields": updated_fields
+                "updated_fields": updated_fields
             },
             message=f"Cập nhật sự kiện thành công. Đã cập nhật: {', '.join(updated_fields)}"
         )
@@ -698,7 +721,7 @@ def delete_event_endpoint(event_id):
             )
         
         return create_response(
-            data={"deletedEventId": event_id},
+            data={"deleted_event_id": event_id},
             message="Xóa sự kiện thành công"
         )
     
@@ -752,9 +775,9 @@ def upload_images(event_id):
         
         return create_response(
             data={
-                "eventId": event_id,
-                "uploadedImages": uploaded_images,
-                "totalImages": len(event['images']) if event else len(uploaded_images)
+                "event_id": event_id,
+                "uploaded_images": uploaded_images,
+                "total_images": len(event['images']) if event else len(uploaded_images)
             },
             message=f"Upload thành công {len(uploaded_images)} hình ảnh",
             status_code=201
@@ -882,7 +905,7 @@ if __name__ == '__main__':
     print("   POST   /events/<id>/images - Upload hình ảnh")
     print("   GET    /event-types     - Loại sự kiện")
     print("   GET    /debug/events    - Debug database state")
-    print("   📝 Note: API now uses 'eventTypeId' instead of 'typeId' for consistency")
+    print("   📝 Note: API now uses 'event_type_id' instead of 'typeId' for consistency")
     print("✨ CORS enabled - Có thể gọi từ mọi domain")
     print("🗄️  SQLite database với quan hệ một-nhiều events-images")
     print("📊 Comprehensive request logging enabled")
