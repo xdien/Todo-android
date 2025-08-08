@@ -478,13 +478,14 @@ fun EventTypeDropdown(
     var expanded by remember { mutableStateOf(false) }
     
     val selectedEventType = eventTypes.find { it.id == selectedTypeId }
+    val selectedEventTypeName = selectedEventType?.name ?: ""
     
     ExposedDropdownMenuBox(
         expanded = expanded,
         onExpandedChange = { expanded = it }
     ) {
         OutlinedTextField(
-            value = selectedEventType?.name ?: "",
+            value = selectedEventTypeName,
             onValueChange = {},
             readOnly = true,
             label = { Text("Loại sự kiện *") },

@@ -28,6 +28,7 @@ fun PersonalEventListCompose(
     onAddEventClick: () -> Unit = {}
 ) {
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val isSearching by viewModel.isSearching.collectAsStateWithLifecycle()
     val eventTypes by viewModel.eventTypes.collectAsStateWithLifecycle()
     val context = LocalContext.current
     
@@ -74,10 +75,26 @@ fun PersonalEventListCompose(
             },
             modifier = Modifier.fillMaxSize(),
             update = { swipeRefreshLayout ->
-                // Update refreshing state
-                swipeRefreshLayout.isRefreshing = isLoading
+                // Update refreshing state (show loading for both regular loading and searching)
+                swipeRefreshLayout.isRefreshing = isLoading || isSearching
             }
         )
+        
+        // Show empty state when no events found
+        if (filteredEvents.isEmpty() && !isLoading && !isSearching) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Không tìm thấy sự kiện nào",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
         
         // Floating Action Button for adding new event
         FloatingActionButton(

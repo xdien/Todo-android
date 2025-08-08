@@ -25,6 +25,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.xdien.todoevent.common.EventBus
 import com.xdien.todoevent.domain.model.Event
 import com.xdien.todoevent.ui.viewmodel.TodoViewModel
 import java.text.SimpleDateFormat
@@ -42,11 +43,41 @@ fun EventDetailScreen(
     var event by remember { mutableStateOf<Event?>(null) }
     val eventTypes by viewModel.eventTypes.collectAsStateWithLifecycle()
     
+    // Load event initially
     LaunchedEffect(eventId) {
         viewModel.getEventById(eventId.toInt()).collect { eventData ->
             event = eventData
         }
     }
+    
+    // Listen to event changes from EventBus and refresh if the current event is updated
+    LaunchedEffect(eventId) {
+        // Get EventBus from the same Hilt container
+        val eventBus = viewModel.getEventBus()
+        eventBus.eventChanges.collect { eventChange ->
+            when (eventChange) {
+                is EventBus.EventChange.EventUpdated -> {
+                    // Refresh the current event if it matches the eventId
+                    android.util.Log.d("EventDetailScreen", "Event updated, refreshing event details for ID: $eventId")
+                    viewModel.getEventById(eventId.toInt()).collect { updatedEvent ->
+                        if (updatedEvent != null) {
+                            event = updatedEvent
+                            android.util.Log.d("EventDetailScreen", "Event details refreshed: ${updatedEvent.title}")
+                        }
+                    }
+                }
+                is EventBus.EventChange.EventDeleted -> {
+                    // If the current event is deleted, navigate back
+                    android.util.Log.d("EventDetailScreen", "Event deleted, navigating back")
+                    onNavigateBack()
+                }
+                else -> {
+                    // For other changes, we don't need to do anything specific
+                }
+            }
+        }
+    }
+    
     var showDeleteDialog by remember { mutableStateOf(false) }
     
     Scaffold(

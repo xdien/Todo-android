@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import javax.inject.Inject
 
 @HiltViewModel
@@ -28,6 +30,19 @@ class TodoViewModel @Inject constructor(
     
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+    
+    // Search state
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+    
+    private val _searchResults = MutableStateFlow<List<Event>>(emptyList())
+    val searchResults: StateFlow<List<Event>> = _searchResults.asStateFlow()
+    
+    private val _isSearching = MutableStateFlow(false)
+    val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
+    
+    // Search job for debouncing
+    private var searchJob: Job? = null
     
     // LiveData for Fragment approach
     private val _eventsLiveData = MutableLiveData<List<Event>>()
@@ -111,6 +126,92 @@ class TodoViewModel @Inject constructor(
                 _isLoading.value = false
                 _isLoadingLiveData.value = false
             }
+        }
+    }
+    
+    /**
+     * Search events with debouncing
+     * @param query Search query
+     */
+    fun searchEvents(query: String) {
+        _searchQuery.value = query
+        
+        // Cancel previous search job
+        searchJob?.cancel()
+        
+        if (query.isEmpty()) {
+            _searchResults.value = emptyList()
+            _isSearching.value = false
+            return
+        }
+        
+        // Start new search job with debouncing
+        searchJob = viewModelScope.launch {
+            _isSearching.value = true
+            
+            // Debounce for 300ms
+            delay(300)
+            
+            try {
+                android.util.Log.d("TodoViewModel", "Searching for: $query")
+                
+                // Try API search first
+                eventRepository.getEvents(query, null).collect { searchResults ->
+                    android.util.Log.d("TodoViewModel", "Search results from API: ${searchResults.size} events")
+                    _searchResults.value = searchResults
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("TodoViewModel", "API search failed, trying local search", e)
+                
+                // Fallback to local search
+                try {
+                    val localResults = searchEventsLocally(query)
+                    android.util.Log.d("TodoViewModel", "Local search results: ${localResults.size} events")
+                    _searchResults.value = localResults
+                } catch (localError: Exception) {
+                    android.util.Log.e("TodoViewModel", "Local search also failed", localError)
+                    _searchResults.value = emptyList()
+                }
+            } finally {
+                _isSearching.value = false
+            }
+        }
+    }
+    
+    /**
+     * Search events locally in the current events list
+     * @param query Search query
+     * @return List of matching events
+     */
+    private fun searchEventsLocally(query: String): List<Event> {
+        val currentEvents = _events.value
+        val lowercaseQuery = query.lowercase()
+        
+        return currentEvents.filter { event ->
+            event.title.lowercase().contains(lowercaseQuery) ||
+            event.description.lowercase().contains(lowercaseQuery) ||
+            event.location.lowercase().contains(lowercaseQuery)
+        }
+    }
+    
+    /**
+     * Clear search results
+     */
+    fun clearSearch() {
+        _searchQuery.value = ""
+        _searchResults.value = emptyList()
+        _isSearching.value = false
+        searchJob?.cancel()
+    }
+    
+    /**
+     * Get current events to display (search results if searching, otherwise all events)
+     */
+    fun getDisplayEvents(): List<Event> {
+        return if (_searchQuery.value.isNotEmpty()) {
+            _searchResults.value
+        } else {
+            _events.value
         }
     }
     
@@ -270,5 +371,12 @@ class TodoViewModel @Inject constructor(
     // Get event type name by ID
     fun getEventTypeName(eventTypeId: Int): String {
         return _eventTypes.value.find { it.id == eventTypeId }?.name ?: "Type $eventTypeId"
+    }
+    
+    /**
+     * Get EventBus instance for external access
+     */
+    fun getEventBus(): EventBus {
+        return eventBus
     }
 } 

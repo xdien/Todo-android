@@ -9,7 +9,9 @@ import com.xdien.todoevent.data.api.EventResponse
 import com.xdien.todoevent.data.api.EventType as ApiEventType
 import com.xdien.todoevent.data.api.CreateEventRequest
 import com.xdien.todoevent.data.dao.EventTypeDao
+import com.xdien.todoevent.data.dao.EventDao
 import com.xdien.todoevent.data.entity.EventTypeEntity
+import com.xdien.todoevent.data.entity.EventEntity
 import com.xdien.todoevent.domain.model.Event
 import com.xdien.todoevent.domain.model.EventImage
 import com.xdien.todoevent.domain.model.EventType
@@ -28,6 +30,7 @@ import javax.inject.Singleton
 class EventRepositoryImpl @Inject constructor(
     private val eventApiService: EventApiService,
     private val eventTypeDao: EventTypeDao,
+    private val eventDao: EventDao,
     private val sharedPreferencesHelper: SharedPreferencesHelper
 ) : EventRepository {
 
@@ -49,6 +52,9 @@ class EventRepositoryImpl @Inject constructor(
                 // Ensure EventType exists in local database
                 ensureEventTypeExists(createdEvent.eventTypeId)
                 
+                // Save to local database
+                saveEventToLocal(createdEvent)
+                
                 // Return the created event with SERVER ID
                 createdEvent
             } else {
@@ -62,57 +68,147 @@ class EventRepositoryImpl @Inject constructor(
     override suspend fun getEvents(keyword: String?, typeId: Int?): Flow<List<Event>> {
         return try {
             Log.d("EventRepositoryImpl", "Fetching events with keyword: $keyword, typeId: $typeId")
-            val apiResponse = eventApiService.getEvents(keyword, typeId)
             
-            Log.d("EventRepositoryImpl", "API response success: ${apiResponse.success}")
-            
-            if (apiResponse.success) {
-                Log.d("EventRepositoryImpl", "API data events count: ${apiResponse.data.events.size}")
-                val events = apiResponse.data.events.map { eventResponse ->
-                    Log.d("EventRepositoryImpl", "Mapping event: ${eventResponse.title} (ID: ${eventResponse.id})")
-                    eventResponse.toDomain(sharedPreferencesHelper)
-                }
+            // Try API first
+            try {
+                val apiResponse = eventApiService.getEvents(keyword, typeId)
                 
-                Log.d("EventRepositoryImpl", "Mapped ${events.size} events to domain models")
+                Log.d("EventRepositoryImpl", "API response success: ${apiResponse.success}")
                 
-                // Ensure all EventTypes exist in local database
-                events.forEach { event ->
-                    ensureEventTypeExists(event.eventTypeId)
+                if (apiResponse.success) {
+                    Log.d("EventRepositoryImpl", "API data events count: ${apiResponse.data.events.size}")
+                    val events = apiResponse.data.events.map { eventResponse ->
+                        Log.d("EventRepositoryImpl", "Mapping event: ${eventResponse.title} (ID: ${eventResponse.id})")
+                        eventResponse.toDomain(sharedPreferencesHelper)
+                    }
+                    
+                    Log.d("EventRepositoryImpl", "Mapped ${events.size} events to domain models")
+                    
+                    // Ensure all EventTypes exist in local database
+                    events.forEach { event ->
+                        ensureEventTypeExists(event.eventTypeId)
+                    }
+                    
+                    // Save events to local database
+                    saveEventsToLocal(events)
+                    
+                    flow { 
+                        Log.d("EventRepositoryImpl", "Emitting ${events.size} events to flow")
+                        emit(events) 
+                    }
+                } else {
+                    Log.e("EventRepositoryImpl", "API call failed: ${apiResponse.message}")
+                    // Fallback to local database
+                    getEventsFromLocal(keyword, typeId)
                 }
-                
-                flow { 
-                    Log.d("EventRepositoryImpl", "Emitting ${events.size} events to flow")
-                    emit(events) 
-                }
-            } else {
-                Log.e("EventRepositoryImpl", "API call failed: ${apiResponse.message}")
-                // Return empty list if API fails
-                flow { emit(emptyList()) }
+            } catch (e: Exception) {
+                Log.e("EventRepositoryImpl", "API call failed with exception, falling back to local", e)
+                // Fallback to local database
+                getEventsFromLocal(keyword, typeId)
             }
         } catch (e: Exception) {
             Log.e("EventRepositoryImpl", "Exception during getEvents", e)
-            // Return empty list if API fails
+            // Return empty list if both API and local fail
             flow { emit(emptyList()) }
+        }
+    }
+    
+    /**
+     * Get events from local database
+     */
+    private suspend fun getEventsFromLocal(keyword: String?, typeId: Int?): Flow<List<Event>> {
+        return try {
+            Log.d("EventRepositoryImpl", "Getting events from local database")
+            val localEvents = when {
+                keyword != null && typeId != null -> {
+                    eventDao.getEventsWithKeywordAndType(keyword, typeId)
+                }
+                keyword != null -> {
+                    eventDao.getEventsWithKeyword(keyword)
+                }
+                typeId != null -> {
+                    eventDao.getEventsByType(typeId)
+                }
+                else -> {
+                    eventDao.getEvents()
+                }
+            }
+            val events = localEvents.map { it.toDomain() }
+            Log.d("EventRepositoryImpl", "Found ${events.size} events in local database")
+            flow { emit(events) }
+        } catch (e: Exception) {
+            Log.e("EventRepositoryImpl", "Error getting events from local database", e)
+            flow { emit(emptyList()) }
+        }
+    }
+    
+    /**
+     * Save events to local database
+     */
+    private suspend fun saveEventsToLocal(events: List<Event>) {
+        try {
+            val eventEntities = events.map { it.toEntity() }
+            eventDao.insertEvents(eventEntities)
+            Log.d("EventRepositoryImpl", "Saved ${events.size} events to local database")
+        } catch (e: Exception) {
+            Log.e("EventRepositoryImpl", "Error saving events to local database", e)
+        }
+    }
+    
+    /**
+     * Save single event to local database
+     */
+    private suspend fun saveEventToLocal(event: Event) {
+        try {
+            val eventEntity = event.toEntity()
+            eventDao.insertEvent(eventEntity)
+            Log.d("EventRepositoryImpl", "Saved event ${event.id} to local database")
+        } catch (e: Exception) {
+            Log.e("EventRepositoryImpl", "Error saving event to local database", e)
         }
     }
 
     override suspend fun getEventById(id: Int): Flow<Event?> {
         return try {
-            val apiResponse = eventApiService.getEventById(id)
-            
-            if (apiResponse.success) {
-                val event = apiResponse.data.toDomain(sharedPreferencesHelper)
+            // Try API first
+            try {
+                val apiResponse = eventApiService.getEventById(id)
                 
-                // Ensure EventType exists in local database
-                ensureEventTypeExists(event.eventTypeId)
-                
-                flow { emit(event) }
-            } else {
-                // Return null if API fails
-                flow { emit(null) }
+                if (apiResponse.success) {
+                    val event = apiResponse.data.toDomain(sharedPreferencesHelper)
+                    
+                    // Ensure EventType exists in local database
+                    ensureEventTypeExists(event.eventTypeId)
+                    
+                    // Save to local database
+                    saveEventToLocal(event)
+                    
+                    flow { emit(event) }
+                } else {
+                    // Fallback to local database
+                    getEventByIdFromLocal(id)
+                }
+            } catch (e: Exception) {
+                Log.e("EventRepositoryImpl", "API call failed, falling back to local", e)
+                // Fallback to local database
+                getEventByIdFromLocal(id)
             }
         } catch (e: Exception) {
-            // Return null if API fails
+            // Return null if both API and local fail
+            flow { emit(null) }
+        }
+    }
+    
+    /**
+     * Get event by ID from local database
+     */
+    private suspend fun getEventByIdFromLocal(id: Int): Flow<Event?> {
+        return try {
+            val eventEntity = eventDao.getEventById(id)
+            val event = eventEntity?.toDomain()
+            flow { emit(event) }
+        } catch (e: Exception) {
+            Log.e("EventRepositoryImpl", "Error getting event from local database", e)
             flow { emit(null) }
         }
     }
@@ -138,6 +234,9 @@ class EventRepositoryImpl @Inject constructor(
                     // Ensure EventType exists in local database
                     ensureEventTypeExists(updatedEvent.eventTypeId)
                     
+                    // Update local database
+                    saveEventToLocal(updatedEvent)
+                    
                     Result.success(updatedEvent)
                 } else {
                     Result.failure(Exception("Failed to get updated event"))
@@ -154,7 +253,15 @@ class EventRepositoryImpl @Inject constructor(
         try {
             val apiResponse = eventApiService.deleteEvent(id)
             
-            if (!apiResponse.success) {
+            if (apiResponse.success) {
+                // Delete from local database
+                try {
+                    eventDao.deleteEventById(id)
+                    Log.d("EventRepositoryImpl", "Deleted event $id from local database")
+                } catch (e: Exception) {
+                    Log.e("EventRepositoryImpl", "Error deleting event from local database", e)
+                }
+            } else {
                 throw Exception(apiResponse.message)
             }
         } catch (e: Exception) {
@@ -317,5 +424,45 @@ private fun ApiEventType.toDomain(): EventType {
         id = this.id,
         name = this.name,
         description = this.description
+    )
+}
+
+// Extension functions for mapping between Entity and Domain models
+private fun EventEntity.toDomain(): Event {
+    return Event(
+        id = this.id,
+        title = this.title,
+        description = this.description,
+        eventTypeId = this.eventTypeId,
+        startDate = this.startDate,
+        location = this.location,
+        createdAt = this.createdAt,
+        updatedAt = this.updatedAt,
+        images = this.images.map { url ->
+            EventImage(
+                id = 0,
+                eventId = this.id,
+                originalName = null,
+                filename = null,
+                filePath = null,
+                fileSize = null,
+                uploadedAt = null,
+                url = url
+            )
+        }
+    )
+}
+
+private fun Event.toEntity(): EventEntity {
+    return EventEntity(
+        id = this.id,
+        title = this.title,
+        description = this.description,
+        eventTypeId = this.eventTypeId,
+        startDate = this.startDate,
+        location = this.location,
+        createdAt = this.createdAt,
+        updatedAt = this.updatedAt,
+        images = this.images.map { it.url }
     )
 } 
