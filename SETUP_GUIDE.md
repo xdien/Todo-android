@@ -73,7 +73,6 @@ cd app
 ## 🔍 Kiểm tra hoạt động
 
 ### Mock Server
-- Truy cập: `http://localhost:8000/docs` để xem API documentation
 - Kiểm tra logs trong terminal để đảm bảo server đang chạy
 
 ### Android App
