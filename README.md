@@ -138,6 +138,8 @@ sdk.dir=/path/to/your/android/sdk
 - **Database Indexing**: Index trên các trường tìm kiếm
 - **Memory Management**: Proper lifecycle management
 
+> 📖 **Xem hướng dẫn chi tiết:** [SETUP_GUIDE.md](./SETUP_GUIDE.md)
+
 ---
 ## Vấn đề tồn đọng
 - Đối với android dưới 13 thì photo picker không hoạt động như đúng yêu cầu.
@@ -145,7 +147,7 @@ sdk.dir=/path/to/your/android/sdk
 - Một số case đi từ màn hình search sang màn hình chi tiết có thể cần cải tiến khi người dùng thục hiện xóa sự kiện thì cũng xóa ở màn kết quả search.
 - Cần đổi RecyclerView sang Lazy cho đúng chuẩn jetpack compose. Nhưng do yêu cầu dùng RecyclerView. 
 - Navigation trong android chưa dùng đúng cách, cần sửa lại.
-- Chưa tối ưu tham số để lưu(cache) và hiển thị hìn á đá asd asd sad sadh ảnh có thể chậm lag khi xử lý với số danh sách lớn.
+- Chưa tối ưu tham số để lưu(cache) và hiển thị hình ảnh có thể chậm lag khi xử lý với số danh sách lớn.
 - Chưa xử lý upload image trong service đặt biệt của android
 - Danh sách RecyclerView có thể cần tối ưu thêm như preloading.
 
