@@ -4,6 +4,12 @@
 
 TodoEvent là ứng dụng mobile giúp người dùng quản lý các sự kiện cá nhân một cách hiệu quả. Ứng dụng hỗ trợ lưu trữ offline, đồng bộ dữ liệu và giao diện người dùng thân thiện.
 
+## 🎥 Demo
+
+[![TodoEvent Demo](https://img.youtube.com/vi/vsI75Icuk6E/0.jpg)](https://www.youtube.com/watch?v=vsI75Icuk6E)
+
+**Xem demo đầy đủ:** [TodoEvent Demo trên YouTube](https://www.youtube.com/watch?v=vsI75Icuk6E)
+
 ## 🚀 Tính năng chính
 
 - ✅ **Quản lý sự kiện**: Thêm, sửa, xóa sự kiện
