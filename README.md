@@ -44,6 +44,8 @@ TodoEvent là ứng dụng mobile giúp người dùng quản lý các sự ki�
 
 ## 🔧 Cài đặt và Chạy
 
+> 📖 **Xem hướng dẫn chi tiết:** [SETUP_GUIDE.md](./SETUP_GUIDE.md)
+
 ### 1. Clone repository
 ```bash
 git clone https://github.com/xdien/todoevent.git
@@ -140,11 +142,6 @@ sdk.dir=/path/to/your/android/sdk
 - Loại sự kiện
 
 
-### Optimization Techniques
-- **Database Indexing**: Index trên các trường tìm kiếm
-- **Memory Management**: Proper lifecycle management
-
-> 📖 **Xem hướng dẫn chi tiết:** [SETUP_GUIDE.md](./SETUP_GUIDE.md)
 
 ---
 ## Vấn đề tồn đọng
